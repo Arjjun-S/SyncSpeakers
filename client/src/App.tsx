@@ -3,7 +3,7 @@ import { AnimalSelector } from './components/AnimalSelector';
 import { DeviceList } from './components/DeviceList';
 import { InviteModal } from './components/InviteModal';
 import { RoomInfo } from './components/RoomInfo';
-import { AudioPlayer } from './components/AudioPlayer';
+import { AudioCapture } from './components/AudioCapture';
 import { SpeakerView } from './components/SpeakerView';
 import { StatusBadge } from './components/StatusBadge';
 import { 
@@ -256,14 +256,17 @@ function App() {
                 <div className="text-center text-muted">or</div>
                 
                 <div className="input-group">
-                  <label>Join Room</label>
+                  <label htmlFor="room-code-input">Join Room</label>
                   <input
+                    id="room-code-input"
+                    name="roomCode"
                     className="input"
                     type="text"
                     placeholder="Enter room code"
                     value={joinRoomCode}
                     onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
                     maxLength={6}
+                    autoComplete="off"
                   />
                 </div>
                 
@@ -294,12 +297,7 @@ function App() {
           
           <RoomInfo roomCode={roomCode} />
           
-          <AudioPlayer 
-            onStreamReady={handleStreamReady}
-            onPlayStateChange={(playing) => {
-              console.log('Play state:', playing);
-            }}
-          />
+          <AudioCapture onStreamReady={handleStreamReady} />
           
           <DeviceList
             clients={clients}

@@ -605,3 +605,57 @@ body {
   font-size: 3rem;
   margin-bottom: 12px;
 }
+
+/* Audio Capture */
+.audio-capture-idle,
+.audio-capture-requesting,
+.audio-capture-active,
+.audio-capture-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.capture-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+}
+
+.capture-icon.pulse {
+  animation: pulse-scale 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-scale {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Audio Visualizer */
+.audio-visualizer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 40px;
+  margin: 16px 0;
+}
+
+.audio-visualizer .bar {
+  width: 6px;
+  background: var(--primary);
+  border-radius: 3px;
+  animation: equalizer 1s ease-in-out infinite;
+}
+
+.audio-visualizer .bar:nth-child(1) { animation-delay: 0s; height: 20px; }
+.audio-visualizer .bar:nth-child(2) { animation-delay: 0.1s; height: 30px; }
+.audio-visualizer .bar:nth-child(3) { animation-delay: 0.2s; height: 40px; }
+.audio-visualizer .bar:nth-child(4) { animation-delay: 0.3s; height: 25px; }
+.audio-visualizer .bar:nth-child(5) { animation-delay: 0.4s; height: 35px; }
+
+@keyframes equalizer {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
