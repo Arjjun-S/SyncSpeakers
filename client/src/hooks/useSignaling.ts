@@ -13,12 +13,13 @@ const getWsUrl = () => {
   if (import.meta.env.VITE_WS_URL) {
     return import.meta.env.VITE_WS_URL;
   }
-  // In production, use the same host with wss
-  if (window.location.protocol === 'https:') {
-    return `wss://${window.location.host}`;
-  }
+  // In production, default to localhost for development
   return 'ws://localhost:8080';
 };
+
+// Max reconnection attempts and backoff
+const MAX_RECONNECT_ATTEMPTS = 5;
+const INITIAL_RECONNECT_DELAY = 1000;
 
 interface UseSignalingOptions {
   roomId: string;
@@ -51,6 +52,8 @@ export function useSignaling({
 }: UseSignalingOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number>();
+  const reconnectAttemptsRef = useRef(0);
+  const isConnectingRef = useRef(false);
   
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [clients, setClients] = useState<Client[]>([]);
@@ -59,15 +62,34 @@ export function useSignaling({
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    // Prevent multiple simultaneous connection attempts
+    if (wsRef.current?.readyState === WebSocket.OPEN || 
+        wsRef.current?.readyState === WebSocket.CONNECTING ||
+        isConnectingRef.current) {
+      return;
+    }
     
+    // Check max reconnection attempts
+    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      console.log('❌ Max reconnection attempts reached');
+      setStatus('disconnected');
+      return;
+    }
+    
+    isConnectingRef.current = true;
     setStatus('connecting');
-    const ws = new WebSocket(getWsUrl());
+    
+    const wsUrl = getWsUrl();
+    console.log('🔌 Connecting to:', wsUrl);
+    
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       console.log('🔌 WebSocket connected');
       setStatus('connected');
+      isConnectingRef.current = false;
+      reconnectAttemptsRef.current = 0; // Reset on successful connection
       
       // Register with the server
       ws.send(JSON.stringify({
@@ -154,18 +176,23 @@ export function useSignaling({
       console.log('🔌 WebSocket disconnected');
       setStatus('disconnected');
       wsRef.current = null;
+      isConnectingRef.current = false;
       
-      // Attempt to reconnect after 3 seconds
-      reconnectTimeoutRef.current = window.setTimeout(() => {
-        if (roomId) {
-          console.log('🔄 Attempting to reconnect...');
+      // Attempt to reconnect with exponential backoff
+      if (roomId && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        const delay = INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttemptsRef.current);
+        reconnectAttemptsRef.current++;
+        console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})...`);
+        
+        reconnectTimeoutRef.current = window.setTimeout(() => {
           connect();
-        }
-      }, 3000);
+        }, delay);
+      }
     };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+    ws.onerror = () => {
+      console.error('WebSocket error');
+      isConnectingRef.current = false;
       onError?.('Connection error');
     };
   }, [roomId, clientId, displayName, role, onInvite, onInviteResponse, onInviteExpired, onInviteCancelled, onSignal, onPlayCommand, onHostDisconnected, onError]);
