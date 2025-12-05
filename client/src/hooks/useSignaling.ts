@@ -55,7 +55,7 @@ export function useSignaling({
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [clients, setClients] = useState<Client[]>([]);
   const [myDisplayName, setMyDisplayName] = useState(displayName);
-  const [myRole, setMyRole] = useState(role);
+  const [myRole, setMyRole] = useState<'idle' | 'host' | 'speaker'>(role);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
 
   const connect = useCallback(() => {

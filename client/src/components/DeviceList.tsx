@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { getAnimalEmoji, type Client, type PendingInvite } from '../types';
 
 interface DeviceListProps {

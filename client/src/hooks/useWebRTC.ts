@@ -138,7 +138,7 @@ export function useWebRTC({ onRemoteStream, onConnectionStateChange }: UseWebRTC
 
   // Close all connections
   const closeAllConnections = useCallback(() => {
-    peerConnectionsRef.current.forEach((pc, peerId) => {
+    peerConnectionsRef.current.forEach((pc) => {
       pc.close();
     });
     peerConnectionsRef.current.clear();

@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { ANIMALS, type Animal } from '../types';
 
 interface AnimalSelectorProps {

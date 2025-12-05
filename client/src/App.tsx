@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { AnimalSelector } from './components/AnimalSelector';
 import { DeviceList } from './components/DeviceList';
 import { InviteModal } from './components/InviteModal';
@@ -41,7 +41,7 @@ function App() {
   // Audio state
   const localStreamRef = useRef<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const [hostClientId, setHostClientId] = useState<string | null>(null);
+  const hostClientIdRef = useRef<string | null>(null);
   const [isRTCConnected, setIsRTCConnected] = useState(false);
   
   // Check URL for room code
@@ -79,7 +79,7 @@ function App() {
   const handleInvite = useCallback((invite: InviteMessage) => {
     console.log('Received invite from:', invite.fromDisplayName);
     setPendingInviteFrom({ id: invite.from, displayName: invite.fromDisplayName });
-    setHostClientId(invite.from);
+    hostClientIdRef.current = invite.from;
   }, []);
   
   const handleInviteResponse = useCallback((from: string, accepted: boolean) => {
@@ -154,7 +154,7 @@ function App() {
   
   // Update view based on role
   useEffect(() => {
-    if (myRole === 'speaker' && view !== 'speaker') {
+    if ((myRole as string) === 'speaker' && view !== 'speaker') {
       setView('speaker');
     }
   }, [myRole, view]);
@@ -216,7 +216,7 @@ function App() {
     setView('welcome');
     setRemoteStream(null);
     setIsRTCConnected(false);
-    setHostClientId(null);
+    hostClientIdRef.current = null;
     localStreamRef.current = null;
     
     // Clear URL params

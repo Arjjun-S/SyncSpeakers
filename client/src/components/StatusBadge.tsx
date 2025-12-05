@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { ConnectionStatus } from '../types';
 
 interface StatusBadgeProps {

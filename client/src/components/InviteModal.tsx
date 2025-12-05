@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { getAnimalEmoji } from '../types';
 
 interface InviteModalProps {

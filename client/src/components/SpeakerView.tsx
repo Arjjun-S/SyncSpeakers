@@ -23,7 +23,7 @@ export function SpeakerView({
   useEffect(() => {
     if (audioRef.current && remoteStream) {
       audioRef.current.srcObject = remoteStream;
-      audioRef.current.play().catch(err => {
+      audioRef.current.play().catch(() => {
         console.log('Autoplay blocked, waiting for user interaction');
       });
     }
@@ -34,8 +34,8 @@ export function SpeakerView({
       try {
         await audioRef.current.play();
         setIsPlaying(true);
-      } catch (err) {
-        console.error('Playback failed:', err);
+      } catch (error) {
+        console.error('Playback failed:', error);
       }
     }
   };
