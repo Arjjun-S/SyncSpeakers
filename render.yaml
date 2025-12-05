@@ -1,0 +1,33 @@
+# Render Blueprint for SyncSpeakers
+# Deploy this to Render to get both the WebSocket server and static site
+
+services:
+  # WebSocket Signaling Server
+  - type: web
+    name: syncspeakers-server
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  # Static Site (React PWA)
+  - type: web
+    name: syncspeakers-client
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    envVars:
+      - key: VITE_WS_URL
+        value: wss://syncspeakers-server.onrender.com

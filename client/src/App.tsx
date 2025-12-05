@@ -1,0 +1,395 @@
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { AnimalSelector } from './components/AnimalSelector';
+import { DeviceList } from './components/DeviceList';
+import { InviteModal } from './components/InviteModal';
+import { RoomInfo } from './components/RoomInfo';
+import { AudioPlayer } from './components/AudioPlayer';
+import { SpeakerView } from './components/SpeakerView';
+import { StatusBadge } from './components/StatusBadge';
+import { 
+  useSignaling, 
+  generateRoomCode, 
+  getOrCreateClientId, 
+  getStoredDisplayName, 
+  storeDisplayName 
+} from './hooks/useSignaling';
+import { useWebRTC } from './hooks/useWebRTC';
+import { ANIMALS, type Animal, type InviteMessage, getAnimalEmoji } from './types';
+
+type AppView = 'welcome' | 'host' | 'speaker' | 'idle';
+
+function App() {
+  // Client state
+  const [clientId] = useState(() => getOrCreateClientId());
+  const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(() => {
+    const stored = getStoredDisplayName();
+    if (stored) {
+      const animal = ANIMALS.find(a => a.name === stored.split('-')[0]);
+      return animal || null;
+    }
+    return null;
+  });
+  
+  // Room state
+  const [view, setView] = useState<AppView>('welcome');
+  const [roomCode, setRoomCode] = useState('');
+  const [joinRoomCode, setJoinRoomCode] = useState('');
+  
+  // Invite modal state
+  const [pendingInviteFrom, setPendingInviteFrom] = useState<{ id: string; displayName: string } | null>(null);
+  
+  // Audio state
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [hostClientId, setHostClientId] = useState<string | null>(null);
+  const [isRTCConnected, setIsRTCConnected] = useState(false);
+  
+  // Check URL for room code
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomFromUrl = params.get('room');
+    if (roomFromUrl) {
+      setJoinRoomCode(roomFromUrl.toUpperCase());
+    }
+  }, []);
+  
+  // WebRTC hook
+  const { 
+    setLocalStream, 
+    createOffer, 
+    handleSignal, 
+    closeAllConnections 
+  } = useWebRTC({
+    onRemoteStream: (stream) => {
+      console.log('Received remote stream');
+      setRemoteStream(stream);
+      setIsRTCConnected(true);
+    },
+    onConnectionStateChange: (state) => {
+      console.log('RTC connection state:', state);
+      if (state === 'connected') {
+        setIsRTCConnected(true);
+      } else if (state === 'disconnected' || state === 'failed') {
+        setIsRTCConnected(false);
+      }
+    }
+  });
+  
+  // Signaling callbacks
+  const handleInvite = useCallback((invite: InviteMessage) => {
+    console.log('Received invite from:', invite.fromDisplayName);
+    setPendingInviteFrom({ id: invite.from, displayName: invite.fromDisplayName });
+    setHostClientId(invite.from);
+  }, []);
+  
+  const handleInviteResponse = useCallback((from: string, accepted: boolean) => {
+    console.log(`Invite response from ${from}: ${accepted ? 'accepted' : 'declined'}`);
+    if (accepted && localStreamRef.current) {
+      // Create WebRTC offer to the new speaker
+      createOffer(from, (payload) => {
+        sendSignalRef.current?.(from, payload);
+      });
+    }
+  }, [createOffer]);
+  
+  const handleInviteExpired = useCallback((inviteId: string) => {
+    console.log('Invite expired:', inviteId);
+    // Clear modal if it was for this invite
+    setPendingInviteFrom(null);
+  }, []);
+  
+  const handleInviteCancelled = useCallback(() => {
+    console.log('Invite cancelled');
+    setPendingInviteFrom(null);
+  }, []);
+  
+  const handleSignalMessage = useCallback((from: string, payload: RTCSessionDescriptionInit | RTCIceCandidateInit) => {
+    console.log('Received signal from:', from);
+    handleSignal(from, payload, (p) => {
+      sendSignalRef.current?.(from, p);
+    });
+  }, [handleSignal]);
+  
+  const handleHostDisconnected = useCallback(() => {
+    console.log('Host disconnected');
+    alert('Host has disconnected from the room');
+    setView('welcome');
+    setRoomCode('');
+    closeAllConnections();
+  }, [closeAllConnections]);
+  
+  const handleError = useCallback((message: string) => {
+    console.error('Error:', message);
+  }, []);
+  
+  // Signaling hook
+  const {
+    status,
+    clients,
+    myDisplayName,
+    myRole,
+    pendingInvites,
+    invite,
+    respondToInvite,
+    cancelInvite,
+    sendSignal,
+    leave
+  } = useSignaling({
+    roomId: roomCode,
+    clientId,
+    displayName: selectedAnimal?.name || 'device',
+    role: view === 'host' ? 'host' : 'idle',
+    onInvite: handleInvite,
+    onInviteResponse: handleInviteResponse,
+    onInviteExpired: handleInviteExpired,
+    onInviteCancelled: handleInviteCancelled,
+    onSignal: handleSignalMessage,
+    onHostDisconnected: handleHostDisconnected,
+    onError: handleError
+  });
+  
+  // Store sendSignal ref for WebRTC callbacks
+  const sendSignalRef = useRef(sendSignal);
+  sendSignalRef.current = sendSignal;
+  
+  // Update view based on role
+  useEffect(() => {
+    if (myRole === 'speaker' && view !== 'speaker') {
+      setView('speaker');
+    }
+  }, [myRole, view]);
+  
+  // Handlers
+  const handleSelectAnimal = (animal: Animal) => {
+    setSelectedAnimal(animal);
+    storeDisplayName(animal.name);
+  };
+  
+  const handleCreateRoom = () => {
+    if (!selectedAnimal) return;
+    const code = generateRoomCode();
+    setRoomCode(code);
+    setView('host');
+  };
+  
+  const handleJoinRoom = () => {
+    if (!selectedAnimal || !joinRoomCode) return;
+    setRoomCode(joinRoomCode.toUpperCase());
+    setView('idle');
+  };
+  
+  const handleAcceptInvite = () => {
+    if (pendingInviteFrom) {
+      respondToInvite(pendingInviteFrom.id, true);
+      setPendingInviteFrom(null);
+      setView('speaker');
+    }
+  };
+  
+  const handleDeclineInvite = () => {
+    if (pendingInviteFrom) {
+      respondToInvite(pendingInviteFrom.id, false);
+      setPendingInviteFrom(null);
+    }
+  };
+  
+  const handleStreamReady = (stream: MediaStream) => {
+    console.log('Audio stream ready');
+    localStreamRef.current = stream;
+    setLocalStream(stream);
+    
+    // If there are already speakers, create offers for them
+    clients
+      .filter(c => c.role === 'speaker' && c.clientId !== clientId)
+      .forEach(speaker => {
+        createOffer(speaker.clientId, (payload) => {
+          sendSignalRef.current?.(speaker.clientId, payload);
+        });
+      });
+  };
+  
+  const handleLeaveRoom = () => {
+    leave();
+    closeAllConnections();
+    setRoomCode('');
+    setJoinRoomCode('');
+    setView('welcome');
+    setRemoteStream(null);
+    setIsRTCConnected(false);
+    setHostClientId(null);
+    localStreamRef.current = null;
+    
+    // Clear URL params
+    window.history.replaceState({}, '', window.location.pathname);
+  };
+  
+  // Find host display name for speaker view
+  const hostInfo = clients.find(c => c.role === 'host');
+  
+  return (
+    <div className="app">
+      <header className="header">
+        <h1>🔊 SyncSpeakers</h1>
+        <p>Synchronized audio across devices</p>
+      </header>
+      
+      {/* Welcome / Setup View */}
+      {view === 'welcome' && (
+        <>
+          <AnimalSelector 
+            selectedAnimal={selectedAnimal} 
+            onSelect={handleSelectAnimal} 
+          />
+          
+          {selectedAnimal && (
+            <div className="card">
+              <div className="text-center mb-4">
+                <span style={{ fontSize: '3rem' }}>{selectedAnimal.emoji}</span>
+                <p className="mt-2">You are <strong>{selectedAnimal.name}</strong></p>
+              </div>
+              
+              <div className="flex flex-col gap-4">
+                <button className="btn btn-primary" onClick={handleCreateRoom}>
+                  🎙️ Create Room (Host)
+                </button>
+                
+                <div className="text-center text-muted">or</div>
+                
+                <div className="input-group">
+                  <label>Join Room</label>
+                  <input
+                    className="input"
+                    type="text"
+                    placeholder="Enter room code"
+                    value={joinRoomCode}
+                    onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
+                    maxLength={6}
+                  />
+                </div>
+                
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={handleJoinRoom}
+                  disabled={!joinRoomCode}
+                >
+                  📱 Join as Speaker
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      
+      {/* Host View */}
+      {view === 'host' && (
+        <>
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <span style={{ fontSize: '2rem' }}>{getAnimalEmoji(myDisplayName)}</span>
+            <div>
+              <strong>{myDisplayName}</strong>
+              <span className="device-role host ml-2">HOST</span>
+            </div>
+            <StatusBadge status={status} />
+          </div>
+          
+          <RoomInfo roomCode={roomCode} />
+          
+          <AudioPlayer 
+            onStreamReady={handleStreamReady}
+            onPlayStateChange={(playing) => {
+              console.log('Play state:', playing);
+            }}
+          />
+          
+          <DeviceList
+            clients={clients}
+            pendingInvites={pendingInvites}
+            myClientId={clientId}
+            isHost={true}
+            onInvite={invite}
+            onCancelInvite={cancelInvite}
+          />
+          
+          <button className="btn btn-danger mt-4" onClick={handleLeaveRoom}>
+            End Session
+          </button>
+        </>
+      )}
+      
+      {/* Idle View (joined but not yet a speaker) */}
+      {view === 'idle' && (
+        <>
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <span style={{ fontSize: '2rem' }}>{getAnimalEmoji(myDisplayName)}</span>
+            <div>
+              <strong>{myDisplayName}</strong>
+              <span className="device-role idle ml-2">WAITING</span>
+            </div>
+            <StatusBadge status={status} />
+          </div>
+          
+          <div className="card">
+            <div className="speaker-status">
+              <div className="emoji">⏳</div>
+              <h2>Waiting for Host</h2>
+              <p className="text-muted">
+                Room: <strong>{roomCode}</strong>
+              </p>
+              <p className="text-muted mt-2">
+                The host will invite you to become a speaker
+              </p>
+            </div>
+          </div>
+          
+          <div className="card">
+            <h3>Devices in Room</h3>
+            <div className="device-list mt-4">
+              {clients.map(client => (
+                <div key={client.clientId} className="device-item">
+                  <div className="device-info">
+                    <span className="device-avatar">{getAnimalEmoji(client.displayName)}</span>
+                    <div>
+                      <div className="device-name">
+                        {client.displayName}
+                        {client.clientId === clientId && ' (You)'}
+                      </div>
+                      <span className={`device-role ${client.role}`}>
+                        {client.role}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <button className="btn btn-danger mt-4" onClick={handleLeaveRoom}>
+            Leave Room
+          </button>
+        </>
+      )}
+      
+      {/* Speaker View */}
+      {view === 'speaker' && (
+        <SpeakerView
+          displayName={myDisplayName}
+          hostDisplayName={hostInfo?.displayName || 'Host'}
+          remoteStream={remoteStream}
+          isConnected={isRTCConnected}
+          onLeave={handleLeaveRoom}
+        />
+      )}
+      
+      {/* Invite Modal */}
+      {pendingInviteFrom && (
+        <InviteModal
+          hostDisplayName={pendingInviteFrom.displayName}
+          onAccept={handleAcceptInvite}
+          onDecline={handleDeclineInvite}
+        />
+      )}
+    </div>
+  );
+}
+
+export default App;
