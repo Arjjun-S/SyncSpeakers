@@ -148,6 +148,12 @@ wss.on('connection', (ws) => {
     
     const { type, roomId, clientId, displayName, role, from, to, payload, accepted, inviteId } = message;
     
+    // Handle ping silently
+    if (type === 'ping') {
+      ws.send(JSON.stringify({ type: 'pong' }));
+      return;
+    }
+    
     console.log(`📨 Received: ${type} from ${from || clientId || 'unknown'}`);
     
     switch (type) {

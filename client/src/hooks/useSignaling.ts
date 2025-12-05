@@ -13,13 +13,14 @@ const getWsUrl = () => {
   if (import.meta.env.VITE_WS_URL) {
     return import.meta.env.VITE_WS_URL;
   }
-  // In production, default to localhost for development
   return 'ws://localhost:8080';
 };
 
-// Max reconnection attempts and backoff
-const MAX_RECONNECT_ATTEMPTS = 5;
-const INITIAL_RECONNECT_DELAY = 1000;
+// Connection settings
+const MAX_RECONNECT_ATTEMPTS = 10;
+const INITIAL_RECONNECT_DELAY = 2000;
+const MAX_RECONNECT_DELAY = 30000;
+const HEARTBEAT_INTERVAL = 25000; // Send ping every 25 seconds to keep connection alive
 
 interface UseSignalingOptions {
   roomId: string;
@@ -52,8 +53,10 @@ export function useSignaling({
 }: UseSignalingOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number>();
+  const heartbeatIntervalRef = useRef<number>();
   const reconnectAttemptsRef = useRef(0);
   const isConnectingRef = useRef(false);
+  const manualDisconnectRef = useRef(false);
   
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [clients, setClients] = useState<Client[]>([]);
@@ -61,17 +64,44 @@ export function useSignaling({
   const [myRole, setMyRole] = useState<'idle' | 'host' | 'speaker'>(role);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
 
+  // Start heartbeat to keep connection alive
+  const startHeartbeat = useCallback(() => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+    }
+    
+    heartbeatIntervalRef.current = window.setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        // Send a ping message to keep connection alive
+        wsRef.current.send(JSON.stringify({ type: 'ping' }));
+        console.log('💓 Heartbeat sent');
+      }
+    }, HEARTBEAT_INTERVAL);
+  }, []);
+
+  // Stop heartbeat
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = undefined;
+    }
+  }, []);
+
   const connect = useCallback(() => {
     // Prevent multiple simultaneous connection attempts
     if (wsRef.current?.readyState === WebSocket.OPEN || 
         wsRef.current?.readyState === WebSocket.CONNECTING ||
         isConnectingRef.current) {
+      console.log('⚠️ Already connected or connecting');
       return;
     }
     
-    // Check max reconnection attempts
+    // Reset manual disconnect flag
+    manualDisconnectRef.current = false;
+    
+    // Check max reconnection attempts (but allow manual reconnect to bypass)
     if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-      console.log('❌ Max reconnection attempts reached');
+      console.log('❌ Max reconnection attempts reached. Use manual reconnect.');
       setStatus('disconnected');
       return;
     }
@@ -91,6 +121,9 @@ export function useSignaling({
       isConnectingRef.current = false;
       reconnectAttemptsRef.current = 0; // Reset on successful connection
       
+      // Start heartbeat
+      startHeartbeat();
+      
       // Register with the server
       ws.send(JSON.stringify({
         type: 'register',
@@ -104,6 +137,13 @@ export function useSignaling({
     ws.onmessage = (event) => {
       try {
         const message: ServerMessage = JSON.parse(event.data);
+        
+        // Handle pong silently
+        if (message.type === 'pong') {
+          console.log('💓 Heartbeat received');
+          return;
+        }
+        
         console.log('📨 Received:', message.type, message);
 
         switch (message.type) {
@@ -177,12 +217,22 @@ export function useSignaling({
       setStatus('disconnected');
       wsRef.current = null;
       isConnectingRef.current = false;
+      stopHeartbeat();
       
-      // Attempt to reconnect with exponential backoff
+      // Don't auto-reconnect if manually disconnected
+      if (manualDisconnectRef.current) {
+        console.log('Manual disconnect - not reconnecting');
+        return;
+      }
+      
+      // Auto-reconnect with exponential backoff
       if (roomId && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-        const delay = INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttemptsRef.current);
+        const delay = Math.min(
+          INITIAL_RECONNECT_DELAY * Math.pow(1.5, reconnectAttemptsRef.current),
+          MAX_RECONNECT_DELAY
+        );
         reconnectAttemptsRef.current++;
-        console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})...`);
+        console.log(`🔄 Reconnecting in ${Math.round(delay/1000)}s (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})...`);
         
         reconnectTimeoutRef.current = window.setTimeout(() => {
           connect();
@@ -195,7 +245,33 @@ export function useSignaling({
       isConnectingRef.current = false;
       onError?.('Connection error');
     };
-  }, [roomId, clientId, displayName, role, onInvite, onInviteResponse, onInviteExpired, onInviteCancelled, onSignal, onPlayCommand, onHostDisconnected, onError]);
+  }, [roomId, clientId, displayName, role, onInvite, onInviteResponse, onInviteExpired, onInviteCancelled, onSignal, onPlayCommand, onHostDisconnected, onError, startHeartbeat, stopHeartbeat]);
+
+  // Manual reconnect - resets attempt counter
+  const manualReconnect = useCallback(() => {
+    console.log('🔄 Manual reconnect requested');
+    
+    // Clear any pending reconnect
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    
+    // Close existing connection if any
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    
+    // Reset counters
+    reconnectAttemptsRef.current = 0;
+    isConnectingRef.current = false;
+    manualDisconnectRef.current = false;
+    
+    // Connect after a brief delay
+    setTimeout(() => {
+      connect();
+    }, 500);
+  }, [connect]);
 
   useEffect(() => {
     if (roomId) {
@@ -203,15 +279,17 @@ export function useSignaling({
     }
 
     return () => {
+      stopHeartbeat();
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current) {
+        manualDisconnectRef.current = true;
         wsRef.current.close();
         wsRef.current = null;
       }
     };
-  }, [roomId, connect]);
+  }, [roomId, connect, stopHeartbeat]);
 
   // Send a message
   const send = useCallback((message: object) => {
@@ -279,16 +357,26 @@ export function useSignaling({
     });
   }, [send, roomId, clientId]);
 
-  // Leave the room
+  // Leave the room (manual disconnect)
   const leave = useCallback(() => {
+    manualDisconnectRef.current = true;
+    stopHeartbeat();
+    
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    
     send({ type: 'leave', roomId, from: clientId });
+    
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
+    
     setClients([]);
     setStatus('disconnected');
-  }, [send, roomId, clientId]);
+    reconnectAttemptsRef.current = 0;
+  }, [send, roomId, clientId, stopHeartbeat]);
 
   return {
     status,
@@ -301,7 +389,8 @@ export function useSignaling({
     cancelInvite,
     sendSignal,
     sendPlayCommand,
-    leave
+    leave,
+    manualReconnect // New: expose manual reconnect
   };
 }
 

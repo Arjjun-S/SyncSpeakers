@@ -155,8 +155,9 @@ body {
   color: white;
 }
 
-.btn-small {
-  padding: 8px 16px;
+.btn-small,
+.btn-sm {
+  padding: 6px 12px;
   font-size: 0.875rem;
   width: auto;
 }

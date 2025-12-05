@@ -92,6 +92,11 @@ export interface ErrorMessage {
   message: string;
 }
 
+// Pong message for heartbeat
+export interface PongMessage {
+  type: 'pong';
+}
+
 export type ServerMessage = 
   | RegisteredMessage 
   | ClientsUpdatedMessage 
@@ -103,7 +108,8 @@ export type ServerMessage =
   | SignalMessage 
   | PlayCommandMessage
   | HostDisconnectedMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | PongMessage;
 
 // Pending invite tracking
 export interface PendingInvite {

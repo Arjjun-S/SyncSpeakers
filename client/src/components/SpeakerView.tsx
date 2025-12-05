@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { getAnimalEmoji } from '../types';
+import { getAnimalEmoji, ConnectionStatus } from '../types';
+import { StatusBadge } from './StatusBadge';
 
 interface SpeakerViewProps {
   displayName: string;
@@ -7,6 +8,8 @@ interface SpeakerViewProps {
   remoteStream: MediaStream | null;
   isConnected: boolean;
   onLeave: () => void;
+  wsStatus?: ConnectionStatus;
+  onReconnect?: () => void;
 }
 
 export function SpeakerView({ 
@@ -14,7 +17,9 @@ export function SpeakerView({
   hostDisplayName, 
   remoteStream, 
   isConnected,
-  onLeave 
+  onLeave,
+  wsStatus = 'connected',
+  onReconnect
 }: SpeakerViewProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -55,6 +60,15 @@ export function SpeakerView({
       <div className="speaker-status">
         <div className="emoji">{getAnimalEmoji(displayName)}</div>
         <h2>{displayName}</h2>
+        
+        <div className="flex items-center gap-2 mb-4">
+          <StatusBadge status={wsStatus} />
+          {wsStatus === 'disconnected' && onReconnect && (
+            <button className="btn btn-secondary btn-sm" onClick={onReconnect}>
+              🔄 Reconnect
+            </button>
+          )}
+        </div>
         
         {isConnected ? (
           <>

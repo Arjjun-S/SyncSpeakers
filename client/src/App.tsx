@@ -133,7 +133,8 @@ function App() {
     respondToInvite,
     cancelInvite,
     sendSignal,
-    leave
+    leave,
+    manualReconnect
   } = useSignaling({
     roomId: roomCode,
     clientId,
@@ -293,6 +294,11 @@ function App() {
               <span className="device-role host ml-2">HOST</span>
             </div>
             <StatusBadge status={status} />
+            {status === 'disconnected' && (
+              <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
+                🔄 Reconnect
+              </button>
+            )}
           </div>
           
           <RoomInfo roomCode={roomCode} />
@@ -324,6 +330,11 @@ function App() {
               <span className="device-role idle ml-2">WAITING</span>
             </div>
             <StatusBadge status={status} />
+            {status === 'disconnected' && (
+              <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
+                🔄 Reconnect
+              </button>
+            )}
           </div>
           
           <div className="card">
@@ -375,6 +386,8 @@ function App() {
           remoteStream={remoteStream}
           isConnected={isRTCConnected}
           onLeave={handleLeaveRoom}
+          wsStatus={status}
+          onReconnect={manualReconnect}
         />
       )}
       
