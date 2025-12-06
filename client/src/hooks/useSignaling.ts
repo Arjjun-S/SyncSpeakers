@@ -10,17 +10,37 @@ import type {
 
 // Get WebSocket URL from environment or default to localhost
 const getWsUrl = () => {
+  // Prefer explicit environment variable
   if (import.meta.env.VITE_WS_URL) {
-    return import.meta.env.VITE_WS_URL;
+    const url = import.meta.env.VITE_WS_URL;
+    // Ensure it's a WebSocket URL
+    if (url.startsWith('http://')) {
+      return url.replace('http://', 'ws://');
+    }
+    if (url.startsWith('https://')) {
+      return url.replace('https://', 'wss://');
+    }
+    return url;
   }
+  
+  // In production, try to derive from current location
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    // For Render: static site is syncspeakers.onrender.com, server is syncspeakers-server.onrender.com
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // Assume server is at -server subdomain
+    const hostname = window.location.hostname.replace('.onrender.com', '-server.onrender.com');
+    return `${protocol}//${hostname}`;
+  }
+  
   return 'ws://localhost:8080';
 };
 
 // Connection settings
 const MAX_RECONNECT_ATTEMPTS = 10;
-const INITIAL_RECONNECT_DELAY = 2000;
-const MAX_RECONNECT_DELAY = 30000;
-const HEARTBEAT_INTERVAL = 25000; // Send ping every 25 seconds to keep connection alive
+const INITIAL_RECONNECT_DELAY = 3000;  // Start with 3 seconds
+const MAX_RECONNECT_DELAY = 10000;     // Cap at 10 seconds (user requested)
+const HEARTBEAT_INTERVAL = 25000;      // Send ping every 25 seconds to keep connection alive
+const CONNECTION_DEBOUNCE = 1000;      // Minimum time between connection attempts
 
 interface UseSignalingOptions {
   roomId: string;
@@ -57,6 +77,7 @@ export function useSignaling({
   const reconnectAttemptsRef = useRef(0);
   const isConnectingRef = useRef(false);
   const manualDisconnectRef = useRef(false);
+  const lastConnectAttemptRef = useRef(0);
   
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [clients, setClients] = useState<Client[]>([]);
@@ -88,6 +109,14 @@ export function useSignaling({
   }, []);
 
   const connect = useCallback(() => {
+    // Debounce rapid connection attempts
+    const now = Date.now();
+    if (now - lastConnectAttemptRef.current < CONNECTION_DEBOUNCE) {
+      console.log('⏳ Connection attempt debounced');
+      return;
+    }
+    lastConnectAttemptRef.current = now;
+    
     // Prevent multiple simultaneous connection attempts
     if (wsRef.current?.readyState === WebSocket.OPEN || 
         wsRef.current?.readyState === WebSocket.CONNECTING ||
@@ -96,7 +125,7 @@ export function useSignaling({
       return;
     }
     
-    // Reset manual disconnect flag
+    // Reset manual disconnect flag only if not already connecting
     manualDisconnectRef.current = false;
     
     // Check max reconnection attempts (but allow manual reconnect to bypass)
