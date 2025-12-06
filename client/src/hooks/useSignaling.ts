@@ -23,7 +23,7 @@ const getWsUrl = () => {
   // Hardcoded production URL for Render (fallback)
   if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
     // Your WebSocket server on Render
-    const wsUrl = 'wss://syncspeakers-server.onrender.com';
+    const wsUrl = 'wss://syncspeakers.onrender.com';
     console.log('Using hardcoded Render WS URL:', wsUrl);
     return wsUrl;
   }

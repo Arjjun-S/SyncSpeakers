@@ -30,4 +30,4 @@ services:
         value: no-cache
     envVars:
       - key: VITE_WS_URL
-        value: wss://syncspeakers-server.onrender.com
+        value: wss://syncspeakers.onrender.com
