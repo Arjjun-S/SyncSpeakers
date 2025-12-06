@@ -10,23 +10,25 @@ import type {
 
 // Get WebSocket URL - MUST be wss:// for production
 const getWsUrl = () => {
-  // Explicit environment variable (preferred)
+  // Explicit environment variable (preferred - set in Render dashboard)
   if (import.meta.env.VITE_WS_URL) {
     let url = import.meta.env.VITE_WS_URL as string;
     // Fix protocol if wrong
     if (url.startsWith('http://')) url = url.replace('http://', 'ws://');
     if (url.startsWith('https://')) url = url.replace('https://', 'wss://');
+    console.log('Using env WS URL:', url);
     return url;
   }
   
-  // Auto-derive for Render deployment
+  // Hardcoded production URL for Render (fallback)
   if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
-    const protocol = 'wss:';
-    // Static site: syncspeakers.onrender.com -> Server: syncspeakers-server.onrender.com
-    const hostname = window.location.hostname.replace('.onrender.com', '-server.onrender.com');
-    return `${protocol}//${hostname}`;
+    // Your WebSocket server on Render
+    const wsUrl = 'wss://syncspeakers-server.onrender.com';
+    console.log('Using hardcoded Render WS URL:', wsUrl);
+    return wsUrl;
   }
   
+  console.log('Using localhost WS URL');
   return 'ws://localhost:8080';
 };
 
@@ -378,6 +380,7 @@ export function useSignaling(options: UseSignalingOptions) {
   // Connect when roomId is set
   useEffect(() => {
     mountedRef.current = true;
+    isIntentionalCloseRef.current = false; // Reset on new connection attempt
     
     if (roomId) {
       // Small delay to batch any rapid updates
@@ -389,6 +392,7 @@ export function useSignaling(options: UseSignalingOptions) {
       
       return () => {
         clearTimeout(timer);
+        // Don't mark as intentional here - let reconnect logic work
       };
     }
   }, [roomId]); // Only depend on roomId, not connect
