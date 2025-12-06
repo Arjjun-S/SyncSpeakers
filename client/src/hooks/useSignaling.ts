@@ -8,26 +8,21 @@ import type {
   PendingInvite 
 } from '../types';
 
-// Get WebSocket URL from environment or default to localhost
+// Get WebSocket URL - MUST be wss:// for production
 const getWsUrl = () => {
-  // Prefer explicit environment variable
+  // Explicit environment variable (preferred)
   if (import.meta.env.VITE_WS_URL) {
-    const url = import.meta.env.VITE_WS_URL;
-    // Ensure it's a WebSocket URL
-    if (url.startsWith('http://')) {
-      return url.replace('http://', 'ws://');
-    }
-    if (url.startsWith('https://')) {
-      return url.replace('https://', 'wss://');
-    }
+    let url = import.meta.env.VITE_WS_URL as string;
+    // Fix protocol if wrong
+    if (url.startsWith('http://')) url = url.replace('http://', 'ws://');
+    if (url.startsWith('https://')) url = url.replace('https://', 'wss://');
     return url;
   }
   
-  // In production, try to derive from current location
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    // For Render: static site is syncspeakers.onrender.com, server is syncspeakers-server.onrender.com
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Assume server is at -server subdomain
+  // Auto-derive for Render deployment
+  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+    const protocol = 'wss:';
+    // Static site: syncspeakers.onrender.com -> Server: syncspeakers-server.onrender.com
     const hostname = window.location.hostname.replace('.onrender.com', '-server.onrender.com');
     return `${protocol}//${hostname}`;
   }
@@ -35,12 +30,28 @@ const getWsUrl = () => {
   return 'ws://localhost:8080';
 };
 
-// Connection settings
-const MAX_RECONNECT_ATTEMPTS = 10;
-const INITIAL_RECONNECT_DELAY = 3000;  // Start with 3 seconds
-const MAX_RECONNECT_DELAY = 10000;     // Cap at 10 seconds (user requested)
-const HEARTBEAT_INTERVAL = 25000;      // Send ping every 25 seconds to keep connection alive
-const CONNECTION_DEBOUNCE = 1000;      // Minimum time between connection attempts
+// Helpers
+export const generateRoomCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+export const getOrCreateClientId = () => {
+  const key = 'syncspeakers_client_id';
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = uuidv4();
+    localStorage.setItem(key, id);
+  }
+  return id;
+};
+
+export const getStoredDisplayName = () => localStorage.getItem('syncspeakers_display_name');
+export const storeDisplayName = (name: string) => localStorage.setItem('syncspeakers_display_name', name);
 
 interface UseSignalingOptions {
   roomId: string;
@@ -57,279 +68,252 @@ interface UseSignalingOptions {
   onError?: (message: string) => void;
 }
 
-export function useSignaling({
-  roomId,
-  clientId,
-  displayName,
-  role,
-  onInvite,
-  onInviteResponse,
-  onInviteExpired,
-  onInviteCancelled,
-  onSignal,
-  onPlayCommand,
-  onHostDisconnected,
-  onError
-}: UseSignalingOptions) {
+export function useSignaling(options: UseSignalingOptions) {
+  const {
+    roomId,
+    clientId,
+    displayName,
+    role
+  } = options;
+
+  // Refs for stable access
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<number>();
-  const heartbeatIntervalRef = useRef<number>();
-  const reconnectAttemptsRef = useRef(0);
-  const isConnectingRef = useRef(false);
-  const manualDisconnectRef = useRef(false);
-  const lastConnectAttemptRef = useRef(0);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const heartbeatRef = useRef<number | null>(null);
+  const isIntentionalCloseRef = useRef(false);
+  const reconnectCountRef = useRef(0);
+  const mountedRef = useRef(true);
   
+  // Store callbacks in refs to avoid dependency issues
+  const callbacksRef = useRef(options);
+  callbacksRef.current = options;
+
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [clients, setClients] = useState<Client[]>([]);
   const [myDisplayName, setMyDisplayName] = useState(displayName);
   const [myRole, setMyRole] = useState<'idle' | 'host' | 'speaker'>(role);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
 
-  // Start heartbeat to keep connection alive
-  const startHeartbeat = useCallback(() => {
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
+  // Cleanup helper
+  const cleanup = useCallback(() => {
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
     }
-    
-    heartbeatIntervalRef.current = window.setInterval(() => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        // Send a ping message to keep connection alive
-        wsRef.current.send(JSON.stringify({ type: 'ping' }));
-        console.log('💓 Heartbeat sent');
-      }
-    }, HEARTBEAT_INTERVAL);
-  }, []);
-
-  // Stop heartbeat
-  const stopHeartbeat = useCallback(() => {
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = undefined;
-    }
-  }, []);
-
-  const connect = useCallback(() => {
-    // Debounce rapid connection attempts
-    const now = Date.now();
-    if (now - lastConnectAttemptRef.current < CONNECTION_DEBOUNCE) {
-      console.log('⏳ Connection attempt debounced');
-      return;
-    }
-    lastConnectAttemptRef.current = now;
-    
-    // Prevent multiple simultaneous connection attempts
-    if (wsRef.current?.readyState === WebSocket.OPEN || 
-        wsRef.current?.readyState === WebSocket.CONNECTING ||
-        isConnectingRef.current) {
-      console.log('⚠️ Already connected or connecting');
-      return;
-    }
-    
-    // Reset manual disconnect flag only if not already connecting
-    manualDisconnectRef.current = false;
-    
-    // Check max reconnection attempts (but allow manual reconnect to bypass)
-    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-      console.log('❌ Max reconnection attempts reached. Use manual reconnect.');
-      setStatus('disconnected');
-      return;
-    }
-    
-    isConnectingRef.current = true;
-    setStatus('connecting');
-    
-    const wsUrl = getWsUrl();
-    console.log('🔌 Connecting to:', wsUrl);
-    
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log('🔌 WebSocket connected');
-      setStatus('connected');
-      isConnectingRef.current = false;
-      reconnectAttemptsRef.current = 0; // Reset on successful connection
-      
-      // Start heartbeat
-      startHeartbeat();
-      
-      // Register with the server
-      ws.send(JSON.stringify({
-        type: 'register',
-        roomId,
-        clientId,
-        displayName,
-        role
-      }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const message: ServerMessage = JSON.parse(event.data);
-        
-        // Handle pong silently
-        if (message.type === 'pong') {
-          console.log('💓 Heartbeat received');
-          return;
-        }
-        
-        console.log('📨 Received:', message.type, message);
-
-        switch (message.type) {
-          case 'registered':
-            setClients(message.clients);
-            setMyDisplayName(message.displayName);
-            setMyRole(message.role as 'idle' | 'host' | 'speaker');
-            break;
-          
-          case 'clients-updated':
-            setClients(message.clients);
-            break;
-          
-          case 'invite':
-            onInvite?.(message);
-            break;
-          
-          case 'invite-sent':
-            setPendingInvites(prev => [...prev, {
-              inviteId: message.inviteId,
-              toClientId: message.to,
-              toDisplayName: message.toDisplayName,
-              sentAt: Date.now()
-            }]);
-            break;
-          
-          case 'invite-response':
-            setPendingInvites(prev => 
-              prev.filter(inv => inv.toClientId !== message.from)
-            );
-            onInviteResponse?.(message.from, message.accepted);
-            break;
-          
-          case 'invite-expired':
-            if (message.to) {
-              setPendingInvites(prev => 
-                prev.filter(inv => inv.inviteId !== message.inviteId)
-              );
-            }
-            onInviteExpired?.(message.inviteId);
-            break;
-          
-          case 'invite-cancelled':
-            onInviteCancelled?.();
-            break;
-          
-          case 'signal':
-            onSignal?.(message.from, message.payload);
-            break;
-          
-          case 'play-command':
-            onPlayCommand?.(message.command, message.timestamp);
-            break;
-          
-          case 'host-disconnected':
-            onHostDisconnected?.();
-            break;
-          
-          case 'error':
-            console.error('Server error:', message.message);
-            onError?.(message.message);
-            break;
-        }
-      } catch (e) {
-        console.error('Failed to parse message:', e);
-      }
-    };
-
-    ws.onclose = () => {
-      console.log('🔌 WebSocket disconnected');
-      setStatus('disconnected');
-      wsRef.current = null;
-      isConnectingRef.current = false;
-      stopHeartbeat();
-      
-      // Don't auto-reconnect if manually disconnected
-      if (manualDisconnectRef.current) {
-        console.log('Manual disconnect - not reconnecting');
-        return;
-      }
-      
-      // Auto-reconnect with exponential backoff
-      if (roomId && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-        const delay = Math.min(
-          INITIAL_RECONNECT_DELAY * Math.pow(1.5, reconnectAttemptsRef.current),
-          MAX_RECONNECT_DELAY
-        );
-        reconnectAttemptsRef.current++;
-        console.log(`🔄 Reconnecting in ${Math.round(delay/1000)}s (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})...`);
-        
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          connect();
-        }, delay);
-      }
-    };
-
-    ws.onerror = () => {
-      console.error('WebSocket error');
-      isConnectingRef.current = false;
-      onError?.('Connection error');
-    };
-  }, [roomId, clientId, displayName, role, onInvite, onInviteResponse, onInviteExpired, onInviteCancelled, onSignal, onPlayCommand, onHostDisconnected, onError, startHeartbeat, stopHeartbeat]);
-
-  // Manual reconnect - resets attempt counter
-  const manualReconnect = useCallback(() => {
-    console.log('🔄 Manual reconnect requested');
-    
-    // Clear any pending reconnect
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
+  }, []);
+
+  // Core connect function - stable, no deps that change
+  const connect = useCallback(() => {
+    // Don't connect if unmounted
+    if (!mountedRef.current) return;
     
-    // Close existing connection if any
+    // Already connected or connecting
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log('✓ Already connected');
+      return;
+    }
+    if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+      console.log('⏳ Connection in progress...');
+      return;
+    }
+
+    // Clean up any existing connection
     if (wsRef.current) {
+      wsRef.current.onopen = null;
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onmessage = null;
       wsRef.current.close();
       wsRef.current = null;
     }
     
-    // Reset counters
-    reconnectAttemptsRef.current = 0;
-    isConnectingRef.current = false;
-    manualDisconnectRef.current = false;
+    cleanup();
     
-    // Connect after a brief delay
-    setTimeout(() => {
-      connect();
-    }, 500);
-  }, [connect]);
+    const wsUrl = getWsUrl();
+    console.log('🔌 Connecting to:', wsUrl);
+    setStatus('connecting');
+    
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-  useEffect(() => {
-    if (roomId) {
-      connect();
-    }
+      ws.onopen = () => {
+        if (!mountedRef.current) return;
+        
+        console.log('✅ WebSocket connected');
+        setStatus('connected');
+        reconnectCountRef.current = 0;
+        
+        // Start heartbeat
+        heartbeatRef.current = window.setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 25000);
+        
+        // Register with server
+        const opts = callbacksRef.current;
+        ws.send(JSON.stringify({
+          type: 'register',
+          roomId: opts.roomId,
+          clientId: opts.clientId,
+          displayName: opts.displayName,
+          role: opts.role
+        }));
+      };
 
-    return () => {
-      stopHeartbeat();
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (wsRef.current) {
-        manualDisconnectRef.current = true;
-        wsRef.current.close();
+      ws.onmessage = (event) => {
+        if (!mountedRef.current) return;
+        
+        try {
+          const message: ServerMessage = JSON.parse(event.data);
+          const opts = callbacksRef.current;
+          
+          if (message.type === 'pong') return; // Heartbeat response
+          
+          switch (message.type) {
+            case 'registered':
+              setClients(message.clients);
+              setMyDisplayName(message.displayName);
+              setMyRole(message.role as 'idle' | 'host' | 'speaker');
+              break;
+            
+            case 'clients-updated':
+              setClients(message.clients);
+              break;
+            
+            case 'invite':
+              opts.onInvite?.(message);
+              break;
+            
+            case 'invite-sent':
+              setPendingInvites(prev => [...prev, {
+                inviteId: message.inviteId,
+                toClientId: message.to,
+                toDisplayName: message.toDisplayName,
+                sentAt: Date.now()
+              }]);
+              break;
+            
+            case 'invite-response':
+              setPendingInvites(prev => prev.filter(inv => inv.toClientId !== message.from));
+              opts.onInviteResponse?.(message.from, message.accepted);
+              break;
+            
+            case 'invite-expired':
+              if (message.to) {
+                setPendingInvites(prev => prev.filter(inv => inv.inviteId !== message.inviteId));
+              }
+              opts.onInviteExpired?.(message.inviteId);
+              break;
+            
+            case 'invite-cancelled':
+              opts.onInviteCancelled?.();
+              break;
+            
+            case 'signal':
+              opts.onSignal?.(message.from, message.payload);
+              break;
+            
+            case 'play-command':
+              opts.onPlayCommand?.(message.command, message.timestamp);
+              break;
+            
+            case 'host-disconnected':
+              opts.onHostDisconnected?.();
+              break;
+            
+            case 'error':
+              console.error('Server error:', message.message);
+              opts.onError?.(message.message);
+              break;
+          }
+        } catch (e) {
+          console.error('Failed to parse message:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        if (!mountedRef.current) return;
+        
+        console.log('🔌 WebSocket closed');
+        cleanup();
         wsRef.current = null;
-      }
-    };
-  }, [roomId, connect, stopHeartbeat]);
+        setStatus('disconnected');
+        
+        // Don't auto-reconnect if intentional
+        if (isIntentionalCloseRef.current) {
+          console.log('Intentional close - not reconnecting');
+          isIntentionalCloseRef.current = false;
+          return;
+        }
+        
+        // Auto-reconnect with backoff (max 10 attempts, max 10 second delay)
+        if (reconnectCountRef.current < 10) {
+          const delay = Math.min(3000 * Math.pow(1.3, reconnectCountRef.current), 10000);
+          reconnectCountRef.current++;
+          console.log(`🔄 Reconnecting in ${Math.round(delay/1000)}s (attempt ${reconnectCountRef.current}/10)`);
+          
+          reconnectTimeoutRef.current = window.setTimeout(() => {
+            if (mountedRef.current) {
+              connect();
+            }
+          }, delay);
+        } else {
+          console.log('❌ Max reconnect attempts reached');
+        }
+      };
 
-  // Send a message
-  const send = useCallback((message: object) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
-    } else {
-      console.warn('WebSocket not connected');
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+        // onclose will handle reconnection
+      };
+      
+    } catch (err) {
+      console.error('Failed to create WebSocket:', err);
+      setStatus('disconnected');
     }
+  }, [cleanup]);
+
+  // Manual reconnect - resets counter and reconnects
+  const manualReconnect = useCallback(() => {
+    console.log('🔄 Manual reconnect');
+    isIntentionalCloseRef.current = false;
+    reconnectCountRef.current = 0;
+    
+    // Close existing if any
+    if (wsRef.current) {
+      wsRef.current.onclose = null; // Prevent auto-reconnect
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    
+    cleanup();
+    setStatus('connecting');
+    
+    // Small delay before connecting
+    setTimeout(() => {
+      if (mountedRef.current) {
+        connect();
+      }
+    }, 300);
+  }, [connect, cleanup]);
+
+  // Send helper
+  const send = useCallback((msg: object) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+      return true;
+    }
+    console.warn('Cannot send - not connected');
+    return false;
   }, []);
 
-  // Invite a client to become a speaker
+  // Actions
   const invite = useCallback((targetClientId: string) => {
     send({
       type: 'invite',
@@ -340,7 +324,6 @@ export function useSignaling({
     });
   }, [send, roomId, clientId]);
 
-  // Respond to an invite
   const respondToInvite = useCallback((hostId: string, accepted: boolean) => {
     send({
       type: 'invite-response',
@@ -349,23 +332,14 @@ export function useSignaling({
       to: hostId,
       accepted
     });
-    
-    if (accepted) {
-      setMyRole('speaker');
-    }
+    if (accepted) setMyRole('speaker');
   }, [send, roomId, clientId]);
 
-  // Cancel a pending invite
   const cancelInvite = useCallback((inviteId: string) => {
-    send({
-      type: 'invite-cancel',
-      inviteId,
-      from: clientId
-    });
+    send({ type: 'invite-cancel', inviteId, from: clientId });
     setPendingInvites(prev => prev.filter(inv => inv.inviteId !== inviteId));
   }, [send, clientId]);
 
-  // Send WebRTC signal
   const sendSignal = useCallback((targetClientId: string, payload: RTCSessionDescriptionInit | RTCIceCandidateInit) => {
     send({
       type: 'signal',
@@ -376,7 +350,6 @@ export function useSignaling({
     });
   }, [send, roomId, clientId]);
 
-  // Send play command to all speakers
   const sendPlayCommand = useCallback((command: 'play' | 'pause' | 'stop') => {
     send({
       type: 'play-command',
@@ -386,15 +359,10 @@ export function useSignaling({
     });
   }, [send, roomId, clientId]);
 
-  // Leave the room (manual disconnect)
   const leave = useCallback(() => {
-    manualDisconnectRef.current = true;
-    stopHeartbeat();
-    
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-    
+    console.log('👋 Leaving room');
+    isIntentionalCloseRef.current = true;
+    cleanup();
     send({ type: 'leave', roomId, from: clientId });
     
     if (wsRef.current) {
@@ -402,10 +370,43 @@ export function useSignaling({
       wsRef.current = null;
     }
     
-    setClients([]);
     setStatus('disconnected');
-    reconnectAttemptsRef.current = 0;
-  }, [send, roomId, clientId, stopHeartbeat]);
+    setClients([]);
+    setPendingInvites([]);
+  }, [cleanup, send, roomId, clientId]);
+
+  // Connect when roomId is set
+  useEffect(() => {
+    mountedRef.current = true;
+    
+    if (roomId) {
+      // Small delay to batch any rapid updates
+      const timer = setTimeout(() => {
+        if (mountedRef.current && roomId) {
+          connect();
+        }
+      }, 100);
+      
+      return () => {
+        clearTimeout(timer);
+      };
+    }
+  }, [roomId]); // Only depend on roomId, not connect
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      isIntentionalCloseRef.current = true;
+      cleanup();
+      
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [cleanup]);
 
   return {
     status,
@@ -419,31 +420,6 @@ export function useSignaling({
     sendSignal,
     sendPlayCommand,
     leave,
-    manualReconnect // New: expose manual reconnect
+    manualReconnect
   };
-}
-
-// Helper to generate a room code
-export function generateRoomCode(): string {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
-// Helper to get or create client ID
-export function getOrCreateClientId(): string {
-  const stored = localStorage.getItem('syncSpeakers_clientId');
-  if (stored) return stored;
-  
-  const newId = uuidv4();
-  localStorage.setItem('syncSpeakers_clientId', newId);
-  return newId;
-}
-
-// Helper to get stored display name
-export function getStoredDisplayName(): string | null {
-  return localStorage.getItem('syncSpeakers_displayName');
-}
-
-// Helper to store display name
-export function storeDisplayName(name: string): void {
-  localStorage.setItem('syncSpeakers_displayName', name);
 }
