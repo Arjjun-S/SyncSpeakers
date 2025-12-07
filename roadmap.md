@@ -25,10 +25,10 @@ A simple, reliable checklist for reducing lag, staying alive during sleep, and w
 
 ## Resilience & Sleep
 
-- [ ] Step 5: Stay alive on sleep
-  - [ ] Request Wake Lock when hosting/playing; re-request on `visibilitychange`.
-  - [ ] Fallback keep-alive tick (silent oscillator) if Wake Lock unavailable.
-  - [ ] Persist session (roomId/clientId/role) and auto-rejoin on resume.
+- [x] Step 5: Stay alive on sleep
+  - [x] Request Wake Lock when hosting/playing; re-request on `visibilitychange`.
+  - [x] Fallback keep-alive tick (silent oscillator) if Wake Lock unavailable.
+  - [x] Persist session (roomId/clientId/role) and auto-rejoin on resume.
 - [ ] Step 6: Reconnect & renegotiate
   - [ ] On WS reconnect, resync role/pending invites and renegotiate WebRTC if ICE/DTLS failed.
   - [ ] Add manual "Refresh audio link" button to rebuild the peer connection without leaving the room.

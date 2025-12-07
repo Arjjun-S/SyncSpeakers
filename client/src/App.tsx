@@ -14,9 +14,11 @@ import {
   storeDisplayName 
 } from './hooks/useSignaling';
 import { useWebRTC } from './hooks/useWebRTC';
+import { useWakeLock } from './hooks/useWakeLock';
 import { ANIMALS, type Animal, type InviteMessage, getAnimalEmoji } from './types';
 
 type AppView = 'welcome' | 'host' | 'speaker' | 'idle';
+const SESSION_KEY = 'syncspeakers_session';
 
 function App() {
   // Client state
@@ -44,6 +46,8 @@ function App() {
   const hostClientIdRef = useRef<string | null>(null);
   const [isRTCConnected, setIsRTCConnected] = useState(false);
   const [hostPlayTimestamp, setHostPlayTimestamp] = useState<number | null>(null);
+
+  const { requestWakeLock, releaseWakeLock } = useWakeLock();
   
   // Check URL for room code
   useEffect(() => {
@@ -53,6 +57,52 @@ function App() {
       setJoinRoomCode(roomFromUrl.toUpperCase());
     }
   }, []);
+
+  // Load persisted session if available
+  useEffect(() => {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return;
+    try {
+      const session = JSON.parse(raw) as { roomCode: string; role: 'host' | 'speaker' };
+      if (!roomCode && session.roomCode) {
+        setRoomCode(session.roomCode);
+        if (session.role === 'host') {
+          setView('host');
+        } else {
+          setJoinRoomCode(session.roomCode);
+          setView('idle');
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to restore session', err);
+    }
+  }, [roomCode]);
+
+  // Auto-rejoin on resume/visibilitychange
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (roomCode) return; // already in a session
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return;
+      try {
+        const session = JSON.parse(raw) as { roomCode: string; role: 'host' | 'speaker' };
+        if (session.roomCode) {
+          setRoomCode(session.roomCode);
+          if (session.role === 'host') {
+            setView('host');
+          } else {
+            setJoinRoomCode(session.roomCode);
+            setView('idle');
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to rejoin session', err);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [roomCode]);
   
   // WebRTC hook
   const { 
@@ -223,6 +273,7 @@ function App() {
   const handleLeaveRoom = () => {
     leave();
     closeAllConnections();
+    releaseWakeLock();
     setRoomCode('');
     setJoinRoomCode('');
     setView('welcome');
@@ -230,10 +281,32 @@ function App() {
     setIsRTCConnected(false);
     hostClientIdRef.current = null;
     localStreamRef.current = null;
+    localStorage.removeItem(SESSION_KEY);
     
     // Clear URL params
     window.history.replaceState({}, '', window.location.pathname);
   };
+
+  // Persist active session so we can resume after sleep/refresh
+  useEffect(() => {
+    if (roomCode && view !== 'welcome') {
+      const role = view === 'host' ? 'host' : 'speaker';
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ roomCode, role }));
+    } else {
+      localStorage.removeItem(SESSION_KEY);
+    }
+  }, [roomCode, view]);
+
+  // Keep device awake (wake lock or silent keep-alive) while hosting or speaking
+  useEffect(() => {
+    const shouldStayAwake = view === 'host' || view === 'speaker';
+    if (shouldStayAwake) {
+      requestWakeLock();
+      return () => {
+        releaseWakeLock();
+      };
+    }
+  }, [view, requestWakeLock, releaseWakeLock]);
   
   // Find host display name for speaker view
   const hostInfo = clients.find(c => c.role === 'host');
