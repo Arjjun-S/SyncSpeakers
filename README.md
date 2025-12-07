@@ -1,213 +1,102 @@
-<<<<<<< HEAD
-# SyncSpeakers
-=======
 # SyncSpeakers
 
-🔊 **Synchronized audio playback across multiple devices** — A WebRTC-based PWA that lets you stream audio from a host device to multiple speaker devices.
+SyncSpeakers is a lightweight WebRTC experience that lets a host capture audio on one device and play it in sync across invited speaker devices. The project pairs a React + Vite progressive web app (PWA) with a Node.js WebSocket signaling server that handles rooms, invitations, and media negotiation.
 
 ## Features
 
-- **Animal Device Names**: Each device gets a friendly animal name (Pig, Dog, Cat, etc.)
-- **Room-based Sessions**: Create or join rooms with simple 6-character codes
-- **Invite/Accept Flow**: Host can invite specific devices; speakers must accept to join
-- **Real-time Audio Streaming**: WebRTC-based low-latency audio from host to speakers
-- **QR Code Sharing**: Easy room sharing via QR codes
-- **PWA Support**: Install as a native app on mobile devices
+- Room-based sessions so hosts can spin up six-character room codes instantly.
+- Friendly animal identities for every device to keep the room list readable.
+- Host-controlled speaker flow with invite, cancel, expire, and cleanup behavior when roles change.
+- WebRTC peer connections that stream the host's captured audio to all accepted speakers.
+- Auto-healing WebSocket signaling with heartbeats, exponential backoff reconnect logic, and manual reconnect controls in the UI.
+- Render blueprint (`render.yaml`) that provisions both the signaling server and static client in one deploy.
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     SyncSpeakers System                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────┐     WebSocket      ┌──────────────────────┐   │
-│  │   Host   │◄──────────────────►│   Render Server      │   │
-│  │  (Pig)   │    Signaling       │   (Node.js + WS)     │   │
-│  └────┬─────┘                    └──────────┬───────────┘   │
-│       │                                     │               │
-│       │ WebRTC (Audio)                      │ WebSocket     │
-│       │                                     │               │
-│       ▼                                     ▼               │
-│  ┌──────────┐                         ┌──────────┐         │
-│  │ Speaker  │◄────────────────────────│ Speaker  │         │
-│  │  (Dog)   │                         │  (Cat)   │         │
-│  └──────────┘                         └──────────┘         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Message Flow
-
-### 1. Registration
-```json
-{ "type": "register", "roomId": "ABC123", "clientId": "uuid", "displayName": "dog", "role": "idle" }
-```
-
-### 2. Host Invites Speaker
-```json
-{ "type": "invite", "roomId": "ABC123", "from": "host-id", "to": "speaker-id", "payload": { "role": "speaker" } }
-```
-
-### 3. Speaker Accepts
-```json
-{ "type": "invite-response", "roomId": "ABC123", "from": "speaker-id", "to": "host-id", "accepted": true }
-```
-
-### 4. WebRTC Signaling
-```json
-{ "type": "signal", "roomId": "ABC123", "from": "host-id", "to": "speaker-id", "payload": { "sdp": "..." } }
-```
-
-## Local Development
-# SyncSpeakers
-
-🔊 **Synchronized audio playback across multiple devices** — A WebRTC-based PWA that lets you stream audio from a host device to multiple speaker devices.
-
-## Features
-
-- **Animal Device Names**: Each device gets a friendly animal name (Pig, Dog, Cat, etc.)
-- **Room-based Sessions**: Create or join rooms with simple 6-character codes
-- **Invite/Accept Flow**: Host can invite specific devices; speakers must accept to join
-- **Real-time Audio Streaming**: WebRTC-based low-latency audio from host to speakers
-- **QR Code Sharing**: Easy room sharing via QR codes
-- **PWA Support**: Install as a native app on mobile devices
-
-## Architecture
+## Repository Structure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     SyncSpeakers System                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────┐     WebSocket      ┌──────────────────────┐   │
-│  │   Host   │◄──────────────────►│   Render Server      │   │
-│  │  (Pig)   │    Signaling       │   (Node.js + WS)     │   │
-│  └────┬─────┘                    └──────────┬───────────┘   │
-│       │                                     │               │
-│       │ WebRTC (Audio)                      │ WebSocket     │
-│       │                                     │               │
-│       ▼                                     ▼               │
-│  ┌──────────┐                         ┌──────────┐         │
-│  │ Speaker  │◄────────────────────────│ Speaker  │         │
-│  │  (Dog)   │                         │  (Cat)   │         │
-│  └──────────┘                         └──────────┘         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+SyncSpeakers/
+|-- client/            # React + TypeScript PWA (Vite)
+|   |-- src/components # UI building blocks (DeviceList, SpeakerView, etc.)
+|   |-- src/hooks      # WebSocket signaling + WebRTC helpers
+|   |-- public/        # Static assets and manifest
+|-- server/            # Node WebSocket signaling bridge
+|   |-- index.js       # Room management, invites, signaling relay
+|-- render.yaml        # Render.com blueprint for server + client
 ```
 
-## Message Flow
+## Prerequisites
 
-### 1. Registration
-```json
-{ "type": "register", "roomId": "ABC123", "clientId": "uuid", "displayName": "dog", "role": "idle" }
-```
+- Node.js 18+
+- npm 9+
+- A modern browser with WebRTC and `getUserMedia` support (for testing the client)
 
-### 2. Host Invites Speaker
-```json
-{ "type": "invite", "roomId": "ABC123", "from": "host-id", "to": "speaker-id", "payload": { "role": "speaker" } }
-```
+## Quick Start
 
-### 3. Speaker Accepts
-```json
-{ "type": "invite-response", "roomId": "ABC123", "from": "speaker-id", "to": "host-id", "accepted": true }
-```
+1. Clone and install dependencies.
+   ```bash
+   git clone https://github.com/Arjjun-S/SyncSpeakers.git
+   cd SyncSpeakers
+   npm install --prefix server
+   npm install --prefix client
+   ```
+2. Start the signaling server.
+   ```bash
+   cd server
+   npm start
+   ```
+   The server listens on `ws://localhost:8080` by default.
+3. Start the Vite client.
+   ```bash
+   cd client
+   npm run dev
+   ```
+   When running locally, Vite serves the app at `http://localhost:5173`. Set `VITE_WS_URL=ws://localhost:8080` in `.env` (or export it in your shell) so the client points to the local server.
 
-### 4. WebRTC Signaling
-```json
-{ "type": "signal", "roomId": "ABC123", "from": "host-id", "to": "speaker-id", "payload": { "sdp": "..." } }
-```
+## Environment
 
-## Local Development
+| Variable      | Location | Description                                                                                                                                                            |
+| ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_WS_URL` | client   | WebSocket endpoint used by the PWA. Required in production. Defaults to `ws://localhost:8080` for local development and falls back to the Render URL in hosted builds. |
 
-### Start the Server
-```bash
-cd server
-npm install
-npm start
-# Server runs on ws://localhost:8080
-```
+## Available Scripts
 
-### Start the Client
-```bash
-cd client
-npm install
-npm run dev
-# Client runs on http://localhost:3000
-```
+### Client (`client/package.json`)
 
-## Deploy to Render
+- `npm run dev` - Start the Vite dev server with hot reloading.
+- `npm run build` - Type-check with `tsc` and produce an optimized production build.
+- `npm run preview` - Preview the production build locally.
 
-1. Push this repo to GitHub
-2. Create a new Blueprint on Render
-3. Connect your GitHub repo
-4. Render will auto-deploy both services using `render.yaml`
+### Server (`server/package.json`)
 
-Or deploy manually:
+- `npm start` - Launch the signaling server (production and local use).
+- `npm run dev` - Alias for `npm start`.
 
-### Server
-1. Create a new Web Service on Render
-2. Connect your repo, set root directory to `server`
-3. Build command: `npm install`
-4. Start command: `npm start`
+## Deployment
 
-### Client
-1. Create a new Static Site on Render
-2. Connect your repo, set root directory to `client`
-3. Build command: `npm install && npm run build`
-4. Publish directory: `dist`
-5. Add env var: `VITE_WS_URL=wss://your-server.onrender.com`
+Render users can deploy both services automatically:
 
-## User Flow
+1. Push the repository to GitHub.
+2. In Render, select **New > Blueprint**, point it at this repo, and pick the `render.yaml` file.
+3. Render provisions two services:
+   - `syncspeakers-server` - Node service that runs `npm install && npm start` inside `/server`.
+   - `syncspeakers-client` - Static site that runs `npm install && npm run build` inside `/client` and publishes `dist/`.
+4. Update `VITE_WS_URL` in the Render dashboard if your signaling endpoint changes.
 
-### Host (Creating a Room)
-1. Open the app
-2. Select an animal name (e.g., Pig)
-3. Click "Create Room (Host)"
-4. Share the room code or QR with other devices
-5. Select an audio file to play
-6. Invite connected devices to become speakers
-7. Control playback for all speakers
+## How It Works
 
-### Speaker (Joining a Room)
-1. Open the app (or scan QR code)
-2. Select an animal name (e.g., Dog)
-3. Enter the room code and join
-4. Wait for host to send an invite
-5. Accept the invite to become a speaker
-6. Audio will start playing automatically
+1. **Device identity** - every browser stores a UUID plus an animal display name in `localStorage` for easy recognition.
+2. **Hosting a room** - the host generates a six-character code, registers as `host`, and captures audio with `getUserMedia`.
+3. **Inviting devices** - hosts see all connected clients, send invites, and the server enforces a 20-second expiration with cancel handling.
+4. **WebRTC negotiation** - accepted speakers trigger SDP offers, the WebSocket server relays signaling messages, and peers exchange ICE candidates via Google STUN servers.
+5. **Playback** - speaker devices auto-play the remote stream, expose manual play and volume controls, and surface connection status via `StatusBadge`.
+6. **Failure handling** - heartbeats, reconnect UI, and host-disconnect broadcasts keep state consistent even when network links drop.
 
-## Testing Checklist
+## Troubleshooting
 
-- [ ] Device registers with animal name and appears in host's device list
-- [ ] Host can invite idle devices
-- [ ] Invited device sees modal with Accept/Decline
-- [ ] On accept, device role updates to "speaker"
-- [ ] WebRTC connection establishes between host and speaker
-- [ ] Audio plays on speaker device
-- [ ] Invite timeout works (20 seconds)
-- [ ] Decline flow notifies host
-- [ ] Multiple speakers can be invited simultaneously
-- [ ] Host disconnect notifies all speakers
-- [ ] Speaker disconnect updates host's device list
-
-## Security Notes
-
-- Uses secure WebSocket (wss://) in production
-- Room codes are short-lived
-- Only hosts can send invites (server-validated)
-- Display names are sanitized
-- No personal data stored
-
-## Tech Stack
-
-- **Frontend**: React 18 + TypeScript + Vite
-- **Styling**: CSS (custom, no framework)
-- **PWA**: vite-plugin-pwa
-- **Backend**: Node.js + ws (WebSocket)
-- **Real-time Audio**: WebRTC
-- **Hosting**: Render (free tier compatible)
+- **Autoplay blocked** - some browsers need a user gesture; tap "Start Playback" in the speaker view to resume audio.
+- **No audio devices** - ensure the host granted microphone permissions; use the browser's site settings to reset permissions if needed.
+- **WebSocket disconnects** - click the reconnect button in the UI or verify `VITE_WS_URL` points to a reachable TLS (`wss://`) endpoint in production.
 
 ## License
 
-MIT
+This project is distributed under the [MIT License](LICENSE).
