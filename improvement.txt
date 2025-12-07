@@ -1,0 +1,12 @@
+Add TURN fallback for hard NATs
+Today useWebRTC only uses Google STUNs. Add optional TURN creds via env (VITE_TURN_URL, VITE_TURN_USER, VITE_TURN_PASS) and include them in ICE_SERVERS in useWebRTC.ts. This only adds a fallback path when STUN fails.
+Slightly richer audio constraints at capture time
+In AudioCapture.tsx, keep the current behavior but request channelCount: 2, sampleRate: 48000, sampleSize: 16, and echoCancellation: true (still works for tab capture and improves consistency). These are hints; browsers ignore them if unsupported, so behavior stays stable.
+Auto-repair broken WebRTC sessions after WS reconnect
+When the signaling status flips to disconnected→connected, trigger a renegotiation for all known speakers from the host (loop clients and call createOffer). That way a brief WS blip won’t leave streams stale.
+Clean up closed peer connections proactively
+In useWebRTC, listen to pc.oniceconnectionstatechange and call closeConnection when the state hits failed/closed. This prevents ghost PCs and avoids renegotiation issues.
+Basic quality telemetry for debugging (no user-facing change)
+Add a lightweight stats poll (e.g., every 5–10s) using pc.getStats() to log audio bitrate, RTT, and packet loss to the console. Gate it behind an env flag so production noise stays minimal, but you have quick insight when debugging.
+Invite timeout clarity
+When an invite expires server-side, also send a short toast/text on the client (reuse the existing invite-expired handler) so users understand why they’re back to waiting. No flow change—just clearer feedback.

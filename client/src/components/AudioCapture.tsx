@@ -86,9 +86,7 @@ export function AudioCapture({ onStreamReady }: AudioCaptureProps) {
   }, [stream]);
 
   return (
-    <div className="card">
-      <h3>🔊 Audio Broadcast</h3>
-      
+    <div className="broadcast-card">
       {status === 'idle' && (
         <div className="audio-capture-idle">
           <div className="capture-icon">🎵</div>

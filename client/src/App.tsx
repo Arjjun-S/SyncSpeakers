@@ -1,11 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { AnimalSelector } from './components/AnimalSelector';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { DeviceList } from './components/DeviceList';
 import { InviteModal } from './components/InviteModal';
-import { RoomInfo } from './components/RoomInfo';
 import { AudioCapture } from './components/AudioCapture';
 import { SpeakerView } from './components/SpeakerView';
 import { StatusBadge } from './components/StatusBadge';
+import { RoleSelector } from './components/RoleSelector';
+import { ProfileForm } from './components/ProfileForm';
+import { SessionPanel } from './components/SessionPanel';
 import { 
   useSignaling, 
   generateRoomCode, 
@@ -21,6 +22,14 @@ type AppView = 'welcome' | 'host' | 'speaker' | 'idle';
 function App() {
   // Client state
   const [clientId] = useState(() => getOrCreateClientId());
+  const [step, setStep] = useState(1);
+  const [selectedRole, setSelectedRole] = useState<'host' | 'speaker' | null>(null);
+  const [profileName, setProfileName] = useState(() => {
+    const stored = getStoredDisplayName();
+    if (!stored) return '';
+    const parts = stored.split('-');
+    return parts.slice(1).join('-');
+  });
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(() => {
     const stored = getStoredDisplayName();
     if (stored) {
@@ -29,6 +38,21 @@ function App() {
     }
     return null;
   });
+
+  const displayName = useMemo(() => {
+    if (!selectedAnimal) return 'device';
+    const cleaned = profileName.trim().replace(/\s+/g, '-');
+    return cleaned ? `${selectedAnimal.name}-${cleaned}` : selectedAnimal.name;
+  }, [selectedAnimal, profileName]);
+  useEffect(() => {
+    if (selectedAnimal) {
+      storeDisplayName(displayName);
+    }
+  }, [selectedAnimal, displayName]);
+
+  const totalSteps = 3;
+  const canProceedToProfile = !!selectedRole;
+  const canProceedToSession = canProceedToProfile && !!selectedAnimal;
   
   // Room state
   const [view, setView] = useState<AppView>('welcome');
@@ -138,7 +162,7 @@ function App() {
   } = useSignaling({
     roomId: roomCode,
     clientId,
-    displayName: selectedAnimal?.name || 'device',
+    displayName,
     role: view === 'host' ? 'host' : 'idle',
     onInvite: handleInvite,
     onInviteResponse: handleInviteResponse,
@@ -161,13 +185,13 @@ function App() {
   }, [myRole, view]);
   
   // Handlers
-  const handleSelectAnimal = (animal: Animal) => {
-    setSelectedAnimal(animal);
-    storeDisplayName(animal.name);
+  const handleSelectRole = (role: 'host' | 'speaker') => {
+    setSelectedRole(role);
   };
   
   const handleCreateRoom = () => {
     if (!selectedAnimal) return;
+    setSelectedRole('host');
     const code = generateRoomCode();
     setRoomCode(code);
     setView('host');
@@ -175,6 +199,7 @@ function App() {
   
   const handleJoinRoom = () => {
     if (!selectedAnimal || !joinRoomCode) return;
+    setSelectedRole('speaker');
     setRoomCode(joinRoomCode.toUpperCase());
     setView('idle');
   };
@@ -215,6 +240,7 @@ function App() {
     setRoomCode('');
     setJoinRoomCode('');
     setView('welcome');
+    setStep(1);
     setRemoteStream(null);
     setIsRTCConnected(false);
     hostClientIdRef.current = null;
@@ -226,172 +252,164 @@ function App() {
   
   // Find host display name for speaker view
   const hostInfo = clients.find(c => c.role === 'host');
+
+  const renderStepper = () => (
+    <div className="stepper">
+      {[1, 2, 3].map((idx) => {
+        const labels = ['Choose role', 'Name & icon', 'Room'];
+        const state = idx < step ? 'completed' : idx === step ? 'active' : 'upcoming';
+        return (
+          <div key={idx} className={`step ${state}`}>
+            <div className="step-number">{idx}</div>
+            <div>
+              <div className="step-label">{labels[idx - 1]}</div>
+              <div className="step-sub">{state === 'completed' ? 'Done' : state === 'active' ? 'In progress' : 'Pending'}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderWizard = () => (
+    <div className="stack">
+      {renderStepper()}
+
+      {step === 1 && (
+        <RoleSelector role={selectedRole} onChange={handleSelectRole} />
+      )}
+
+      {step === 2 && (
+        <ProfileForm 
+          selectedAnimal={selectedAnimal}
+          onSelectAnimal={setSelectedAnimal}
+          profileName={profileName}
+          onProfileNameChange={setProfileName}
+        />
+      )}
+
+      {step === 3 && (
+        <SessionPanel
+          role={selectedRole}
+          myDisplayName={displayName}
+          roomCode={roomCode}
+          joinCode={joinRoomCode}
+          status={status}
+          onJoinCodeChange={setJoinRoomCode}
+          onCreateRoom={handleCreateRoom}
+          onJoinRoom={handleJoinRoom}
+          onLeave={handleLeaveRoom}
+        />
+      )}
+
+      <div className="wizard-nav">
+        {step > 1 && (
+          <button className="btn btn-secondary" onClick={() => setStep(step - 1)}>
+            ◀ Back
+          </button>
+        )}
+        {step < totalSteps && (
+          <button
+            className="btn btn-primary"
+            onClick={() => setStep(step + 1)}
+            disabled={(step === 1 && !canProceedToProfile) || (step === 2 && !canProceedToSession)}
+          >
+            Next ▶
+          </button>
+        )}
+      </div>
+    </div>
+  );
   
   return (
-    <div className="app">
-      <header className="header">
-        <h1>🔊 SyncSpeakers</h1>
-        <p>Synchronized audio across devices</p>
+    <div className="app-shell">
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">SyncSpeakers</p>
+          <h1>Get connected in three quick steps</h1>
+          <p className="text-muted">Move through role, profile, and room setup—then go live.</p>
+        </div>
+        <div className="status-chip">
+          <span className="chip-icon">{getAnimalEmoji(myDisplayName)}</span>
+          <div>
+            <div className="chip-title">{myDisplayName || 'Not set'}</div>
+            <div className="chip-sub"><StatusBadge status={status} /> {roomCode ? `• Room ${roomCode}` : '• Offline'}</div>
+          </div>
+        </div>
       </header>
-      
-      {/* Welcome / Setup View */}
-      {view === 'welcome' && (
-        <>
-          <AnimalSelector 
-            selectedAnimal={selectedAnimal} 
-            onSelect={handleSelectAnimal} 
-          />
-          
-          {selectedAnimal && (
+
+      {view === 'welcome' && renderWizard()}
+
+      {view !== 'welcome' && (
+        <div className="stack">
+          {view === 'idle' && (
             <div className="card">
-              <div className="text-center mb-4">
-                <span style={{ fontSize: '3rem' }}>{selectedAnimal.emoji}</span>
-                <p className="mt-2">You are <strong>{selectedAnimal.name}</strong></p>
-              </div>
-              
-              <div className="flex flex-col gap-4">
-                <button className="btn btn-primary" onClick={handleCreateRoom}>
-                  🎙️ Create Room (Host)
-                </button>
-                
-                <div className="text-center text-muted">or</div>
-                
-                <div className="input-group">
-                  <label htmlFor="room-code-input">Join Room</label>
-                  <input
-                    id="room-code-input"
-                    name="roomCode"
-                    className="input"
-                    type="text"
-                    placeholder="Enter room code"
-                    value={joinRoomCode}
-                    onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
-                    maxLength={6}
-                    autoComplete="off"
-                  />
+              <div className="row-between">
+                <div>
+                  <p className="eyebrow">Waiting</p>
+                  <h2>Waiting for host</h2>
+                  <p className="text-muted">Room {roomCode || '—'} • You will be invited to speak</p>
                 </div>
-                
-                <button 
-                  className="btn btn-secondary" 
-                  onClick={handleJoinRoom}
-                  disabled={!joinRoomCode}
-                >
-                  📱 Join as Speaker
-                </button>
+                <span className="hero-emoji">⏳</span>
+              </div>
+              <div className="tag-list">
+                {clients.map(client => (
+                  <span key={client.clientId} className={`chip-outline ${client.clientId === clientId ? 'chip-active' : ''}`}>
+                    {getAnimalEmoji(client.displayName)} {client.displayName} ({client.role})
+                  </span>
+                ))}
+              </div>
+              <div className="wizard-nav">
+                <button className="btn btn-secondary" onClick={handleLeaveRoom}>✋ Leave</button>
               </div>
             </div>
           )}
-        </>
-      )}
-      
-      {/* Host View */}
-      {view === 'host' && (
-        <>
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <span style={{ fontSize: '2rem' }}>{getAnimalEmoji(myDisplayName)}</span>
-            <div>
-              <strong>{myDisplayName}</strong>
-              <span className="device-role host ml-2">HOST</span>
-            </div>
-            <StatusBadge status={status} />
-            {status === 'disconnected' && (
-              <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
-                🔄 Reconnect
-              </button>
-            )}
-          </div>
-          
-          <RoomInfo roomCode={roomCode} />
-          
-          <AudioCapture onStreamReady={handleStreamReady} />
-          
-          <DeviceList
-            clients={clients}
-            pendingInvites={pendingInvites}
-            myClientId={clientId}
-            isHost={true}
-            onInvite={invite}
-            onCancelInvite={cancelInvite}
-          />
-          
-          <button className="btn btn-danger mt-4" onClick={handleLeaveRoom}>
-            End Session
-          </button>
-        </>
-      )}
-      
-      {/* Idle View (joined but not yet a speaker) */}
-      {view === 'idle' && (
-        <>
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <span style={{ fontSize: '2rem' }}>{getAnimalEmoji(myDisplayName)}</span>
-            <div>
-              <strong>{myDisplayName}</strong>
-              <span className="device-role idle ml-2">WAITING</span>
-            </div>
-            <StatusBadge status={status} />
-            {status === 'disconnected' && (
-              <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
-                🔄 Reconnect
-              </button>
-            )}
-          </div>
-          
-          <div className="card">
-            <div className="speaker-status">
-              <div className="emoji">⏳</div>
-              <h2>Waiting for Host</h2>
-              <p className="text-muted">
-                Room: <strong>{roomCode}</strong>
-              </p>
-              <p className="text-muted mt-2">
-                The host will invite you to become a speaker
-              </p>
-            </div>
-          </div>
-          
-          <div className="card">
-            <h3>Devices in Room</h3>
-            <div className="device-list mt-4">
-              {clients.map(client => (
-                <div key={client.clientId} className="device-item">
-                  <div className="device-info">
-                    <span className="device-avatar">{getAnimalEmoji(client.displayName)}</span>
-                    <div>
-                      <div className="device-name">
-                        {client.displayName}
-                        {client.clientId === clientId && ' (You)'}
-                      </div>
-                      <span className={`device-role ${client.role}`}>
-                        {client.role}
-                      </span>
-                    </div>
+
+          {view === 'host' && (
+            <>
+              <div className="card">
+                <div className="row-between">
+                  <div>
+                    <p className="eyebrow">Broadcast</p>
+                    <h2>Share your audio</h2>
+                    <p className="text-muted">Start capturing a tab or screen with audio</p>
                   </div>
+                  {status === 'disconnected' && (
+                    <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>🔄 Reconnect</button>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
-          
-          <button className="btn btn-danger mt-4" onClick={handleLeaveRoom}>
-            Leave Room
-          </button>
-        </>
+                <AudioCapture onStreamReady={handleStreamReady} />
+              </div>
+
+              <DeviceList
+                clients={clients}
+                pendingInvites={pendingInvites}
+                myClientId={clientId}
+                isHost={true}
+                onInvite={invite}
+                onCancelInvite={cancelInvite}
+              />
+
+              <button className="btn btn-danger" onClick={handleLeaveRoom}>
+                End session
+              </button>
+            </>
+          )}
+
+          {view === 'speaker' && (
+            <SpeakerView
+              displayName={myDisplayName}
+              hostDisplayName={hostInfo?.displayName || 'Host'}
+              remoteStream={remoteStream}
+              isConnected={isRTCConnected}
+              onLeave={handleLeaveRoom}
+              wsStatus={status}
+              onReconnect={manualReconnect}
+            />
+          )}
+        </div>
       )}
-      
-      {/* Speaker View */}
-      {view === 'speaker' && (
-        <SpeakerView
-          displayName={myDisplayName}
-          hostDisplayName={hostInfo?.displayName || 'Host'}
-          remoteStream={remoteStream}
-          isConnected={isRTCConnected}
-          onLeave={handleLeaveRoom}
-          wsStatus={status}
-          onReconnect={manualReconnect}
-        />
-      )}
-      
-      {/* Invite Modal */}
+
       {pendingInviteFrom && (
         <InviteModal
           hostDisplayName={pendingInviteFrom.displayName}
