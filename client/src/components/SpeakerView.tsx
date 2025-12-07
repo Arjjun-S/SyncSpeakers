@@ -35,6 +35,7 @@ export function SpeakerView({
   const delayRef = useRef<DelayNode | null>(null);
   const [volume, setVolume] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const targetDelayMs = 120;
   const minDelayMs = 80;
@@ -167,8 +168,18 @@ export function SpeakerView({
                 )}
 
                 {onRefresh && (
-                  <button className="btn btn-secondary mb-3" onClick={onRefresh}>
-                    🔁 Refresh audio link
+                  <button
+                    className={`btn btn-secondary mb-3 btn-refresh ${refreshing ? 'spinning' : ''}`}
+                    onClick={() => {
+                      if (refreshing) return;
+                      setRefreshing(true);
+                      onRefresh();
+                      setTimeout(() => setRefreshing(false), 1200);
+                    }}
+                    disabled={refreshing}
+                  >
+                    <span className="refresh-icon">🔁</span>
+                    {refreshing ? 'Refreshing...' : 'Refresh audio link'}
                   </button>
                 )}
                 

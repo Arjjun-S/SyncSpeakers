@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AudioCapture } from '../components/AudioCapture';
 import { DeviceList } from '../components/DeviceList';
 import { RoomInfo } from '../components/RoomInfo';
@@ -46,6 +47,15 @@ export function HostScreen({
   onLeave,
   onReconnect,
 }: HostScreenProps) {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefreshClick = () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    onRefreshLinks();
+    setTimeout(() => setRefreshing(false), 1200);
+  };
+
   return (
     <div className="dashboard-grid">
       <div className="card compact host-card">
@@ -68,8 +78,13 @@ export function HostScreen({
 
       <div className="card compact action-card">
         <div className="action-row">
-          <button className="btn btn-secondary" onClick={onRefreshLinks}>
-            🔁 Refresh audio links
+          <button
+            className={`btn btn-secondary btn-refresh ${refreshing ? 'spinning' : ''}`}
+            onClick={handleRefreshClick}
+            disabled={refreshing}
+          >
+            <span className="refresh-icon">🔁</span>
+            {refreshing ? 'Refreshing...' : 'Refresh audio links'}
           </button>
           <button className="btn btn-danger" onClick={onLeave}>
             End Session

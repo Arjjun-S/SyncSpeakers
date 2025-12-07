@@ -244,6 +244,45 @@ body {
   border-radius: 50%;
 }
 
+.btn-refresh {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-refresh .refresh-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s ease;
+}
+
+.btn-refresh.spinning .refresh-icon {
+  animation: spin 0.9s linear infinite;
+}
+
+.btn-refresh::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.btn-refresh:active::after,
+.btn-refresh.spinning::after {
+  opacity: 1;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Inputs */
 .input-group {
   margin-bottom: 16px;
@@ -1024,6 +1063,34 @@ body {
   justify-content: center;
   padding: 20px;
   z-index: 1200;
+}
+
+.page {
+  animation: pageFade 320ms ease;
+}
+
+.slide-in {
+  animation-name: pageSlide;
+}
+
+@keyframes pageFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pageSlide {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .audio-picker-dialog {

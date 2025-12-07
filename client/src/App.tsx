@@ -489,74 +489,82 @@ function App() {
       
       {/* Welcome / Setup View */}
       {view === 'welcome' && (
-        <WelcomeScreen
-          selectedRole={selectedRole}
-          onSelectRole={handleSelectRole}
-          selectedAnimal={selectedAnimal}
-          onSelectAnimal={handleSelectAnimal}
-          customName={customName}
-          onCustomNameChange={setCustomName}
-          joinRoomCode={joinRoomCode}
-          onJoinRoomCodeChange={(code) => setJoinRoomCode(code)}
-          onContinue={handleProfileContinue}
-          onBack={() => setSelectedRole(null)}
-        />
+        <div className="page slide-in">
+          <WelcomeScreen
+            selectedRole={selectedRole}
+            onSelectRole={handleSelectRole}
+            selectedAnimal={selectedAnimal}
+            onSelectAnimal={handleSelectAnimal}
+            customName={customName}
+            onCustomNameChange={setCustomName}
+            joinRoomCode={joinRoomCode}
+            onJoinRoomCodeChange={(code) => setJoinRoomCode(code)}
+            onContinue={handleProfileContinue}
+            onBack={() => setSelectedRole(null)}
+          />
+        </div>
       )}
       
       {/* Host View */}
       {view === 'host' && (
-        <HostScreen
-          myDisplayName={myDisplayName}
-          badgeStatus={badgeStatus}
-          latencyMs={latencyMs ?? undefined}
-          lastPacketAgeMs={lastPacketAgeMs ?? undefined}
-          status={status}
-          roomCode={roomCode}
-          clients={clients}
-          pendingInvites={pendingInvites}
-          myClientId={clientId}
-          preflightChips={preflightChips}
-          onInvite={invite}
-          onCancelInvite={cancelInvite}
-          onStreamReady={handleStreamReady}
-          onRefreshLinks={handleRefreshAudioLinks}
-          onLeave={handleLeaveRoom}
-          onReconnect={manualReconnect}
-        />
+        <div className="page slide-in">
+          <HostScreen
+            myDisplayName={myDisplayName}
+            badgeStatus={badgeStatus}
+            latencyMs={latencyMs ?? undefined}
+            lastPacketAgeMs={lastPacketAgeMs ?? undefined}
+            status={status}
+            roomCode={roomCode}
+            clients={clients}
+            pendingInvites={pendingInvites}
+            myClientId={clientId}
+            preflightChips={preflightChips}
+            onInvite={invite}
+            onCancelInvite={cancelInvite}
+            onStreamReady={handleStreamReady}
+            onRefreshLinks={handleRefreshAudioLinks}
+            onLeave={handleLeaveRoom}
+            onReconnect={manualReconnect}
+          />
+        </div>
       )}
       
       {/* Idle View (joined but not yet a speaker) */}
       {view === 'idle' && (
-        <IdleScreen
-          myDisplayName={myDisplayName}
-          badgeStatus={badgeStatus}
-          latencyMs={latencyMs ?? undefined}
-          lastPacketAgeMs={lastPacketAgeMs ?? undefined}
-          status={status}
-          roomCode={roomCode}
-          preflightChips={preflightChips}
-          clients={clients}
-          myClientId={clientId}
-          onReconnect={manualReconnect}
-          onLeave={handleLeaveRoom}
-        />
+        <div className="page slide-in">
+          <IdleScreen
+            myDisplayName={myDisplayName}
+            badgeStatus={badgeStatus}
+            latencyMs={latencyMs ?? undefined}
+            lastPacketAgeMs={lastPacketAgeMs ?? undefined}
+            status={status}
+            roomCode={roomCode}
+            preflightChips={preflightChips}
+            clients={clients}
+            myClientId={clientId}
+            onReconnect={manualReconnect}
+            onLeave={handleLeaveRoom}
+          />
+        </div>
       )}
       
       {/* Speaker View */}
       {view === 'speaker' && (
-        <SpeakerScreen
-          displayName={myDisplayName}
-          hostDisplayName={hostInfo?.displayName || 'Host'}
-          remoteStream={remoteStream}
-          isConnected={isRTCConnected}
-          onLeave={handleLeaveRoom}
-          wsStatus={badgeStatus}
-          latencyMs={latencyMs ?? undefined}
-          lastPacketAgeMs={lastPacketAgeMs ?? undefined}
-          hostTimestampMs={hostPlayTimestamp ?? undefined}
-          onReconnect={manualReconnect}
-          onRefresh={handleSpeakerRefresh}
-        />
+        <div className="page slide-in">
+          <SpeakerScreen
+            displayName={myDisplayName}
+            hostDisplayName={hostInfo?.displayName || 'Host'}
+            remoteStream={remoteStream}
+            isConnected={isRTCConnected}
+            onLeave={handleLeaveRoom}
+            wsStatus={badgeStatus}
+            latencyMs={latencyMs ?? undefined}
+            lastPacketAgeMs={lastPacketAgeMs ?? undefined}
+            hostTimestampMs={hostPlayTimestamp ?? undefined}
+            onReconnect={manualReconnect}
+            onRefresh={handleSpeakerRefresh}
+          />
+        </div>
       )}
       
       {/* Invite Modal */}
