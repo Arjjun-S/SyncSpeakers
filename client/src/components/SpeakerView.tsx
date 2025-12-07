@@ -87,12 +87,28 @@ export function SpeakerView({
   }, [ensureContext, targetDelayMs, maxDelayMs, volume, tearDown]);
 
   useEffect(() => {
-    // Do not auto-start playback to satisfy browser autoplay policies.
     if (!remoteStream) {
       tearDown();
       setIsPlaying(false);
+      return () => {};
     }
+
+    let cancelled = false;
+    const tryAutoPlay = async () => {
+      try {
+        await setupPipeline(remoteStream);
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("Auto playback blocked; tap Start Playback", err);
+        }
+      }
+    };
+
+    // Try to start immediately; if the browser blocks it, the button remains available.
+    void tryAutoPlay();
+
     return () => {
+      cancelled = true;
       tearDown();
     };
   }, [remoteStream, setupPipeline, tearDown]);
