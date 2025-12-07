@@ -12,6 +12,7 @@ interface SpeakerViewProps {
   latencyMs?: number | null;
   hostTimestampMs?: number;
   onReconnect?: () => void;
+  onRefresh?: () => void;
 }
 
 export function SpeakerView({ 
@@ -23,7 +24,8 @@ export function SpeakerView({
   wsStatus = 'connected',
   latencyMs,
   hostTimestampMs,
-  onReconnect
+  onReconnect,
+  onRefresh
 }: SpeakerViewProps) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -159,6 +161,12 @@ export function SpeakerView({
                 {!isPlaying && (
                   <button className="btn btn-primary mb-4" onClick={handlePlay}>
                     🔊 Start Playback
+                  </button>
+                )}
+
+                {onRefresh && (
+                  <button className="btn btn-secondary mb-3" onClick={onRefresh}>
+                    🔁 Refresh audio link
                   </button>
                 )}
                 

@@ -15,7 +15,7 @@ import {
 } from './hooks/useSignaling';
 import { useWebRTC } from './hooks/useWebRTC';
 import { useWakeLock } from './hooks/useWakeLock';
-import { ANIMALS, type Animal, type InviteMessage, getAnimalEmoji } from './types';
+import { ANIMALS, type Animal, type InviteMessage, getAnimalEmoji, type ConnectionStatus } from './types';
 
 type AppView = 'welcome' | 'host' | 'speaker' | 'idle';
 const SESSION_KEY = 'syncspeakers_session';
@@ -46,6 +46,7 @@ function App() {
   const hostClientIdRef = useRef<string | null>(null);
   const [isRTCConnected, setIsRTCConnected] = useState(false);
   const [hostPlayTimestamp, setHostPlayTimestamp] = useState<number | null>(null);
+  const prevWsStatusRef = useRef<ConnectionStatus>('disconnected');
 
   const { requestWakeLock, releaseWakeLock } = useWakeLock();
   
@@ -109,19 +110,26 @@ function App() {
     setLocalStream, 
     createOffer, 
     handleSignal, 
-    closeAllConnections 
+    closeAllConnections,
+    renegotiate
   } = useWebRTC({
     onRemoteStream: (stream) => {
       console.log('Received remote stream');
       setRemoteStream(stream);
       setIsRTCConnected(true);
     },
-    onConnectionStateChange: (state) => {
+    onConnectionStateChange: (peerId, state) => {
       console.log('RTC connection state:', state);
       if (state === 'connected') {
         setIsRTCConnected(true);
       } else if (state === 'disconnected' || state === 'failed') {
         setIsRTCConnected(false);
+        // Host can proactively renegotiate when a link fails
+        if (view === 'host') {
+          renegotiate(peerId, (payload) => {
+            sendSignalRef.current?.(peerId, payload);
+          });
+        }
       }
     }
   });
@@ -219,6 +227,23 @@ function App() {
       setView('speaker');
     }
   }, [myRole, view]);
+
+  // On WebSocket reconnection, resync offers to current speakers
+  useEffect(() => {
+    const prev = prevWsStatusRef.current;
+    if (status === 'connected' && (prev === 'disconnected' || prev === 'connecting')) {
+      if (view === 'host' && clients.length > 0) {
+        clients
+          .filter(c => c.role === 'speaker')
+          .forEach(speaker => {
+            createOffer(speaker.clientId, (payload) => {
+              sendSignalRef.current?.(speaker.clientId, payload);
+            });
+          });
+      }
+    }
+    prevWsStatusRef.current = status;
+  }, [status, view, clients, createOffer]);
   
   // Handlers
   const handleSelectAnimal = (animal: Animal) => {
@@ -286,6 +311,23 @@ function App() {
     // Clear URL params
     window.history.replaceState({}, '', window.location.pathname);
   };
+
+  const handleRefreshAudioLinks = useCallback(() => {
+    if (view !== 'host') return;
+    clients
+      .filter(c => c.role === 'speaker')
+      .forEach(speaker => {
+        createOffer(speaker.clientId, (payload) => {
+          sendSignalRef.current?.(speaker.clientId, payload);
+        });
+      });
+  }, [view, clients, createOffer]);
+
+  const handleSpeakerRefresh = useCallback(() => {
+    closeAllConnections();
+    manualReconnect();
+    setIsRTCConnected(false);
+  }, [closeAllConnections, manualReconnect]);
 
   // Persist active session so we can resume after sleep/refresh
   useEffect(() => {
@@ -397,6 +439,10 @@ function App() {
             onInvite={invite}
             onCancelInvite={cancelInvite}
           />
+
+          <button className="btn btn-secondary mt-3" onClick={handleRefreshAudioLinks}>
+            🔁 Refresh audio links
+          </button>
           
           <button className="btn btn-danger mt-4" onClick={handleLeaveRoom}>
             End Session
@@ -474,6 +520,7 @@ function App() {
           latencyMs={latencyMs}
           hostTimestampMs={hostPlayTimestamp ?? undefined}
           onReconnect={manualReconnect}
+          onRefresh={handleSpeakerRefresh}
         />
       )}
       

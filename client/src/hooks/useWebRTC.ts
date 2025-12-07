@@ -2,7 +2,10 @@ import { useRef, useCallback, useEffect, useState } from "react";
 
 interface UseWebRTCOptions {
   onRemoteStream?: (stream: MediaStream) => void;
-  onConnectionStateChange?: (state: RTCPeerConnectionState) => void;
+  onConnectionStateChange?: (
+    peerId: string,
+    state: RTCPeerConnectionState
+  ) => void;
 }
 
 const normalizeTurnUrl = (url: string) => {
@@ -116,7 +119,7 @@ export function useWebRTC({
         setConnectionStates((prev) =>
           new Map(prev).set(peerId, pc.connectionState)
         );
-        onConnectionStateChange?.(pc.connectionState);
+        onConnectionStateChange?.(peerId, pc.connectionState);
       };
 
       // Handle remote stream
@@ -228,6 +231,20 @@ export function useWebRTC({
     }
   }, []);
 
+  // Force renegotiation by rebuilding the peer connection and sending a fresh offer
+  const renegotiate = useCallback(
+    async (
+      peerId: string,
+      sendSignal: (
+        payload: RTCSessionDescriptionInit | RTCIceCandidateInit
+      ) => void
+    ) => {
+      closeConnection(peerId);
+      await createOffer(peerId, sendSignal);
+    },
+    [closeConnection, createOffer]
+  );
+
   // Close all connections
   const closeAllConnections = useCallback(() => {
     peerConnectionsRef.current.forEach((pc) => {
@@ -256,5 +273,6 @@ export function useWebRTC({
     handleSignal,
     closeConnection,
     closeAllConnections,
+    renegotiate,
   };
 }
