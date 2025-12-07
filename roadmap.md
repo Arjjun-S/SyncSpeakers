@@ -39,9 +39,9 @@ A simple, reliable checklist for reducing lag, staying alive during sleep, and w
   - [x] Status badges: `connected / unstable / reconnecting`, show RTT and last packet age.
   - [x] Toast on invite expiry/cancel; auto-clear stale modals.
   - [x] Preflight: mic permission, HTTPS+autoplay readiness, TURN reachability test.
-- [ ] Step 8: Code structure
-  - [ ] Split `App.tsx` into `WelcomeScreen`, `HostScreen`, `IdleScreen`, `SpeakerScreen`.
-  - [ ] Organize folders: `components/`, `hooks/` (`useSignaling`, `useWebRTC`, `useWakeLock`, `useLatency`), `services/` (`signalingClient`, `turnConfig`, `timeSync`), `types/`, `utils/`.
+- [x] Step 8: Code structure
+  - [x] Split `App.tsx` into `WelcomeScreen`, `HostScreen`, `IdleScreen`, `SpeakerScreen`.
+  - [x] Organize folders: `components/`, `hooks/` (`useSignaling`, `useWebRTC`, `useWakeLock`, `useLatency`), `services/` (`signalingClient`, `turnConfig`, `timeSync`), `types/`, `utils/`.
 
 ## Server Hardening
 
@@ -49,13 +49,3 @@ A simple, reliable checklist for reducing lag, staying alive during sleep, and w
   - [ ] Rate limit messages per client; validate roomId format; guard duplicate hosts.
   - [ ] Add health endpoint and room cleanup timers.
   - [ ] (Optional) Redis presence if scaling horizontally.
-
-## PWA & Testing
-
-- [ ] Step 10: PWA basics (optional)
-  - [ ] Add manifest + service worker for shell caching (exclude WS/TURN).
-  - [ ] Provide install prompt and icon assets.
-- [ ] Step 11: Testing & metrics
-  - [ ] Integration tests for invite flow, expiry, cancel, reconnect.
-  - [ ] Log join time, offer/answer round-trip, audio start time.
-  - [ ] Manual matrix: same Wi‑Fi, different Wi‑Fi, LTE↔Wi‑Fi, screen-off, background tab.

@@ -1,11 +1,9 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { AnimalSelector } from './components/AnimalSelector';
-import { DeviceList } from './components/DeviceList';
 import { InviteModal } from './components/InviteModal';
-import { RoomInfo } from './components/RoomInfo';
-import { AudioCapture } from './components/AudioCapture';
-import { SpeakerView } from './components/SpeakerView';
-import { StatusBadge } from './components/StatusBadge';
+import { WelcomeScreen } from './screens/WelcomeScreen';
+import { HostScreen } from './screens/HostScreen';
+import { IdleScreen } from './screens/IdleScreen';
+import { SpeakerScreen } from './screens/SpeakerScreen';
 import { 
   useSignaling, 
   generateRoomCode, 
@@ -15,7 +13,7 @@ import {
 } from './hooks/useSignaling';
 import { useWebRTC, ICE_SERVERS } from './hooks/useWebRTC';
 import { useWakeLock } from './hooks/useWakeLock';
-import { ANIMALS, type Animal, type InviteMessage, getAnimalEmoji, type ConnectionStatus } from './types';
+import { ANIMALS, type Animal, type InviteMessage, type ConnectionStatus } from './types';
 
 type AppView = 'welcome' | 'host' | 'speaker' | 'idle';
 const SESSION_KEY = 'syncspeakers_session';
@@ -491,218 +489,70 @@ function App() {
       
       {/* Welcome / Setup View */}
       {view === 'welcome' && (
-        <div className="grid grid-two">
-          <div className="card">
-            <h2>Step 1: Choose role</h2>
-            <p className="text-muted mb-3">Pick how this device participates.</p>
-            <div className="role-grid">
-              <button className={`role-card glass ${selectedRole === 'host' ? 'selected' : ''}`} onClick={() => handleSelectRole('host')}>
-                <div className="role-top">
-                  <span className="role-chip">Host</span>
-                  <span className="role-emoji" aria-hidden>🎙️</span>
-                </div>
-                <div className="role-body">
-                  <div className="role-title">Capture and send audio</div>
-                  <div className="role-text">Share a browser tab and stream it to everyone.</div>
-                </div>
-                <div className="role-foot">Best for: laptop or desktop running the show.</div>
-              </button>
-              <button className={`role-card glass ${selectedRole === 'speaker' ? 'selected' : ''}`} onClick={() => handleSelectRole('speaker')}>
-                <div className="role-top">
-                  <span className="role-chip alt">Speaker</span>
-                  <span className="role-emoji" aria-hidden>🔊</span>
-                </div>
-                <div className="role-body">
-                  <div className="role-title">Receive and play audio</div>
-                  <div className="role-text">Syncs playback with the host—just pick a device and listen.</div>
-                </div>
-                <div className="role-foot">Best for: phones, tablets, smart displays.</div>
-              </button>
-            </div>
-          </div>
-
-          <div className="card">
-            <h2>Step 2: Profile</h2>
-            <p className="text-muted mb-3">Pick a name and icon for this device.</p>
-            <div className="input-group">
-              <label htmlFor="name-input">Display name</label>
-              <input
-                id="name-input"
-                className="input"
-                type="text"
-                placeholder="e.g. LivingRoom"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-              />
-            </div>
-            <AnimalSelector selectedAnimal={selectedAnimal} onSelect={handleSelectAnimal} />
-
-            {selectedRole === 'speaker' && (
-              <div className="input-group">
-                <label htmlFor="room-code-input">Room code</label>
-                <input
-                  id="room-code-input"
-                  className="input"
-                  type="text"
-                  placeholder="ABC123"
-                  value={joinRoomCode}
-                  onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
-                  maxLength={6}
-                  autoComplete="off"
-                />
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              {selectedRole && (
-                <button className="btn btn-secondary" onClick={() => setSelectedRole(null)}>
-                  ◀ Back
-                </button>
-              )}
-              <button className="btn btn-primary" onClick={handleProfileContinue} disabled={!selectedRole || (selectedRole === 'speaker' && !joinRoomCode)}>
-                Continue
-              </button>
-            </div>
-          </div>
-        </div>
+        <WelcomeScreen
+          selectedRole={selectedRole}
+          onSelectRole={handleSelectRole}
+          selectedAnimal={selectedAnimal}
+          onSelectAnimal={handleSelectAnimal}
+          customName={customName}
+          onCustomNameChange={setCustomName}
+          joinRoomCode={joinRoomCode}
+          onJoinRoomCodeChange={(code) => setJoinRoomCode(code)}
+          onContinue={handleProfileContinue}
+          onBack={() => setSelectedRole(null)}
+        />
       )}
       
       {/* Host View */}
       {view === 'host' && (
-        <div className="dashboard-grid">
-          <div className="card compact host-card">
-            <div className="host-meta">
-              <span style={{ fontSize: '2rem' }}>{getAnimalEmoji(myDisplayName)}</span>
-              <div>
-                <div className="label">Host</div>
-                <div className="title-sm">{myDisplayName}</div>
-              </div>
-            </div>
-            <div className="host-status">
-              <StatusBadge status={badgeStatus} latencyMs={latencyMs} lastPacketAgeMs={lastPacketAgeMs} />
-              {status === 'disconnected' && (
-                <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
-                  🔄 Reconnect
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="card compact action-card">
-            <div className="action-row">
-              <button className="btn btn-secondary" onClick={handleRefreshAudioLinks}>
-                🔁 Refresh audio links
-              </button>
-              <button className="btn btn-danger" onClick={handleLeaveRoom}>
-                End Session
-              </button>
-            </div>
-          </div>
-
-          <RoomInfo roomCode={roomCode} />
-
-          <DeviceList
-            clients={clients}
-            pendingInvites={pendingInvites}
-            myClientId={clientId}
-            isHost={true}
-            onInvite={invite}
-            onCancelInvite={cancelInvite}
-          />
-
-          {preflightChips.length > 0 && (
-            <div className="card compact full-span">
-              <div className="label mb-2">Preflight</div>
-              <div className="chip-row dense">
-                {preflightChips.map((chip, idx) => (
-                  <span key={idx} className={`chip ${chip.tone}`}>{chip.label}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="full-span">
-            <AudioCapture onStreamReady={handleStreamReady} />
-          </div>
-        </div>
+        <HostScreen
+          myDisplayName={myDisplayName}
+          badgeStatus={badgeStatus}
+          latencyMs={latencyMs ?? undefined}
+          lastPacketAgeMs={lastPacketAgeMs ?? undefined}
+          status={status}
+          roomCode={roomCode}
+          clients={clients}
+          pendingInvites={pendingInvites}
+          myClientId={clientId}
+          preflightChips={preflightChips}
+          onInvite={invite}
+          onCancelInvite={cancelInvite}
+          onStreamReady={handleStreamReady}
+          onRefreshLinks={handleRefreshAudioLinks}
+          onLeave={handleLeaveRoom}
+          onReconnect={manualReconnect}
+        />
       )}
       
       {/* Idle View (joined but not yet a speaker) */}
       {view === 'idle' && (
-        <>
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <span style={{ fontSize: '2rem' }}>{getAnimalEmoji(myDisplayName)}</span>
-            <div>
-              <strong>{myDisplayName}</strong>
-              <span className="device-role idle ml-2">WAITING</span>
-            </div>
-            <StatusBadge status={badgeStatus} latencyMs={latencyMs} lastPacketAgeMs={lastPacketAgeMs} />
-            {status === 'disconnected' && (
-              <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
-                🔄 Reconnect
-              </button>
-            )}
-          </div>
-          
-          <div className="card">
-            <div className="speaker-status">
-              <div className="emoji">⏳</div>
-              <h2>Waiting for Host</h2>
-              <p className="text-muted">
-                Room: <strong>{roomCode}</strong>
-              </p>
-              {preflightChips.length > 0 && (
-                <div className="chip-row mt-2">
-                  {preflightChips.map((chip, idx) => (
-                    <span key={idx} className={`chip ${chip.tone}`}>{chip.label}</span>
-                  ))}
-                </div>
-              )}
-              <p className="text-muted mt-2">
-                The host will invite you to become a speaker
-              </p>
-            </div>
-          </div>
-          
-          <div className="card">
-            <h3>Devices in Room</h3>
-            <div className="device-list mt-4">
-              {clients.map(client => (
-                <div key={client.clientId} className="device-item">
-                  <div className="device-info">
-                    <span className="device-avatar">{getAnimalEmoji(client.displayName)}</span>
-                    <div>
-                      <div className="device-name">
-                        {client.displayName}
-                        {client.clientId === clientId && ' (You)'}
-                      </div>
-                      <span className={`device-role ${client.role}`}>
-                        {client.role}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <button className="btn btn-danger mt-4" onClick={handleLeaveRoom}>
-            Leave Room
-          </button>
-        </>
+        <IdleScreen
+          myDisplayName={myDisplayName}
+          badgeStatus={badgeStatus}
+          latencyMs={latencyMs ?? undefined}
+          lastPacketAgeMs={lastPacketAgeMs ?? undefined}
+          status={status}
+          roomCode={roomCode}
+          preflightChips={preflightChips}
+          clients={clients}
+          myClientId={clientId}
+          onReconnect={manualReconnect}
+          onLeave={handleLeaveRoom}
+        />
       )}
       
       {/* Speaker View */}
       {view === 'speaker' && (
-        <SpeakerView
+        <SpeakerScreen
           displayName={myDisplayName}
           hostDisplayName={hostInfo?.displayName || 'Host'}
           remoteStream={remoteStream}
           isConnected={isRTCConnected}
           onLeave={handleLeaveRoom}
           wsStatus={badgeStatus}
-          latencyMs={latencyMs}
-          lastPacketAgeMs={lastPacketAgeMs}
+          latencyMs={latencyMs ?? undefined}
+          lastPacketAgeMs={lastPacketAgeMs ?? undefined}
           hostTimestampMs={hostPlayTimestamp ?? undefined}
           onReconnect={manualReconnect}
           onRefresh={handleSpeakerRefresh}
