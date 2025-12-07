@@ -11,6 +11,7 @@ interface SpeakerViewProps {
   wsStatus?: ConnectionStatus;
   latencyMs?: number | null;
   hostTimestampMs?: number;
+  lastPacketAgeMs?: number | null;
   onReconnect?: () => void;
   onRefresh?: () => void;
 }
@@ -24,6 +25,7 @@ export function SpeakerView({
   wsStatus = 'connected',
   latencyMs,
   hostTimestampMs,
+  lastPacketAgeMs,
   onReconnect,
   onRefresh
 }: SpeakerViewProps) {
@@ -141,7 +143,7 @@ export function SpeakerView({
         <h2>{displayName}</h2>
         
         <div className="flex items-center gap-2 mb-4">
-          <StatusBadge status={wsStatus} latencyMs={latencyMs} />
+          <StatusBadge status={wsStatus} latencyMs={latencyMs} lastPacketAgeMs={lastPacketAgeMs} />
           {wsStatus === 'disconnected' && onReconnect && (
             <button className="btn btn-secondary btn-sm" onClick={onReconnect}>
               🔄 Reconnect

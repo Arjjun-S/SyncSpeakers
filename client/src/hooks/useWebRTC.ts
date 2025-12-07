@@ -46,7 +46,7 @@ const buildIceServers = (): RTCConfiguration => {
   return { iceServers: [...turnServers, ...stunDefaults] };
 };
 
-const ICE_SERVERS = buildIceServers();
+export const ICE_SERVERS = buildIceServers();
 
 const applySenderParams = async (pc: RTCPeerConnection) => {
   const senders = pc.getSenders();

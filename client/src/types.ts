@@ -2,22 +2,27 @@
 export interface Client {
   clientId: string;
   displayName: string;
-  role: 'idle' | 'host' | 'speaker';
+  role: "idle" | "host" | "speaker";
 }
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+export type ConnectionStatus =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "unstable"
+  | "reconnecting";
 
 // Message types
 export interface RegisterMessage {
-  type: 'register';
+  type: "register";
   roomId: string;
   clientId: string;
   displayName: string;
-  role: 'idle' | 'host';
+  role: "idle" | "host";
 }
 
 export interface RegisteredMessage {
-  type: 'registered';
+  type: "registered";
   clientId: string;
   displayName: string;
   role: string;
@@ -26,12 +31,12 @@ export interface RegisteredMessage {
 }
 
 export interface ClientsUpdatedMessage {
-  type: 'clients-updated';
+  type: "clients-updated";
   clients: Client[];
 }
 
 export interface InviteMessage {
-  type: 'invite';
+  type: "invite";
   inviteId: string;
   from: string;
   fromDisplayName: string;
@@ -42,14 +47,14 @@ export interface InviteMessage {
 }
 
 export interface InviteSentMessage {
-  type: 'invite-sent';
+  type: "invite-sent";
   inviteId: string;
   to: string;
   toDisplayName: string;
 }
 
 export interface InviteResponseMessage {
-  type: 'invite-response';
+  type: "invite-response";
   from: string;
   fromDisplayName?: string;
   accepted: boolean;
@@ -57,7 +62,7 @@ export interface InviteResponseMessage {
 }
 
 export interface InviteExpiredMessage {
-  type: 'invite-expired';
+  type: "invite-expired";
   inviteId: string;
   to?: string;
   from?: string;
@@ -65,47 +70,47 @@ export interface InviteExpiredMessage {
 }
 
 export interface InviteCancelledMessage {
-  type: 'invite-cancelled';
+  type: "invite-cancelled";
   inviteId: string;
   reason?: string;
 }
 
 export interface SignalMessage {
-  type: 'signal';
+  type: "signal";
   from: string;
   payload: RTCSessionDescriptionInit | RTCIceCandidateInit;
 }
 
 export interface PlayCommandMessage {
-  type: 'play-command';
-  command: 'play' | 'pause' | 'stop';
+  type: "play-command";
+  command: "play" | "pause" | "stop";
   timestamp?: number;
 }
 
 export interface HostDisconnectedMessage {
-  type: 'host-disconnected';
+  type: "host-disconnected";
   message: string;
 }
 
 export interface ErrorMessage {
-  type: 'error';
+  type: "error";
   message: string;
 }
 
 // Pong message for heartbeat
 export interface PongMessage {
-  type: 'pong';
+  type: "pong";
 }
 
-export type ServerMessage = 
-  | RegisteredMessage 
-  | ClientsUpdatedMessage 
-  | InviteMessage 
+export type ServerMessage =
+  | RegisteredMessage
+  | ClientsUpdatedMessage
+  | InviteMessage
   | InviteSentMessage
-  | InviteResponseMessage 
-  | InviteExpiredMessage 
+  | InviteResponseMessage
+  | InviteExpiredMessage
   | InviteCancelledMessage
-  | SignalMessage 
+  | SignalMessage
   | PlayCommandMessage
   | HostDisconnectedMessage
   | ErrorMessage
@@ -126,27 +131,27 @@ export interface Animal {
 }
 
 export const ANIMALS: Animal[] = [
-  { name: 'pig', emoji: '🐷' },
-  { name: 'dog', emoji: '🐕' },
-  { name: 'cat', emoji: '🐱' },
-  { name: 'rabbit', emoji: '🐰' },
-  { name: 'fox', emoji: '🦊' },
-  { name: 'owl', emoji: '🦉' },
-  { name: 'lion', emoji: '🦁' },
-  { name: 'bear', emoji: '🐻' },
-  { name: 'wolf', emoji: '🐺' },
-  { name: 'deer', emoji: '🦌' },
-  { name: 'eagle', emoji: '🦅' },
-  { name: 'tiger', emoji: '🐯' },
-  { name: 'panda', emoji: '🐼' },
-  { name: 'koala', emoji: '🐨' },
-  { name: 'penguin', emoji: '🐧' },
-  { name: 'dolphin', emoji: '🐬' },
+  { name: "pig", emoji: "🐷" },
+  { name: "dog", emoji: "🐕" },
+  { name: "cat", emoji: "🐱" },
+  { name: "rabbit", emoji: "🐰" },
+  { name: "fox", emoji: "🦊" },
+  { name: "owl", emoji: "🦉" },
+  { name: "lion", emoji: "🦁" },
+  { name: "bear", emoji: "🐻" },
+  { name: "wolf", emoji: "🐺" },
+  { name: "deer", emoji: "🦌" },
+  { name: "eagle", emoji: "🦅" },
+  { name: "tiger", emoji: "🐯" },
+  { name: "panda", emoji: "🐼" },
+  { name: "koala", emoji: "🐨" },
+  { name: "penguin", emoji: "🐧" },
+  { name: "dolphin", emoji: "🐬" },
 ];
 
 // Helper to get emoji for an animal name
 export function getAnimalEmoji(name: string): string {
-  const baseName = name.split('-')[0].toLowerCase();
-  const animal = ANIMALS.find(a => a.name === baseName);
-  return animal?.emoji || '🎵';
+  const baseName = name.split("-")[0].toLowerCase();
+  const animal = ANIMALS.find((a) => a.name === baseName);
+  return animal?.emoji || "🎵";
 }

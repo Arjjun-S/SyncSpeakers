@@ -35,10 +35,10 @@ A simple, reliable checklist for reducing lag, staying alive during sleep, and w
 
 ## UX & Structure
 
-- [ ] Step 7: Network-quality UX
-  - [ ] Status badges: `connected / unstable / reconnecting`, show RTT and last packet age.
-  - [ ] Toast on invite expiry/cancel; auto-clear stale modals.
-  - [ ] Preflight: mic permission, HTTPS+autoplay readiness, TURN reachability test.
+- [x] Step 7: Network-quality UX
+  - [x] Status badges: `connected / unstable / reconnecting`, show RTT and last packet age.
+  - [x] Toast on invite expiry/cancel; auto-clear stale modals.
+  - [x] Preflight: mic permission, HTTPS+autoplay readiness, TURN reachability test.
 - [ ] Step 8: Code structure
   - [ ] Split `App.tsx` into `WelcomeScreen`, `HostScreen`, `IdleScreen`, `SpeakerScreen`.
   - [ ] Organize folders: `components/`, `hooks/` (`useSignaling`, `useWebRTC`, `useWakeLock`, `useLatency`), `services/` (`signalingClient`, `turnConfig`, `timeSync`), `types/`, `utils/`.

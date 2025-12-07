@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimalSelector } from './components/AnimalSelector';
 import { DeviceList } from './components/DeviceList';
 import { InviteModal } from './components/InviteModal';
@@ -13,7 +13,7 @@ import {
   getStoredDisplayName, 
   storeDisplayName 
 } from './hooks/useSignaling';
-import { useWebRTC } from './hooks/useWebRTC';
+import { useWebRTC, ICE_SERVERS } from './hooks/useWebRTC';
 import { useWakeLock } from './hooks/useWakeLock';
 import { ANIMALS, type Animal, type InviteMessage, getAnimalEmoji, type ConnectionStatus } from './types';
 
@@ -23,6 +23,7 @@ const SESSION_KEY = 'syncspeakers_session';
 function App() {
   // Client state
   const [clientId] = useState(() => getOrCreateClientId());
+  const [displayName, setDisplayName] = useState<string>(() => getStoredDisplayName() || 'device');
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(() => {
     const stored = getStoredDisplayName();
     if (stored) {
@@ -31,6 +32,10 @@ function App() {
     }
     return null;
   });
+  const [customName, setCustomName] = useState<string>(() => getStoredDisplayName() || '');
+  const [selectedRole, setSelectedRole] = useState<'host' | 'speaker' | null>(null);
+  const [toasts, setToasts] = useState<Array<{ id: number; message: string; tone?: 'info' | 'warning' | 'error' }>>([]);
+  const [preflight, setPreflight] = useState<{ mic?: 'ok' | 'blocked'; autoplay?: 'ok' | 'blocked'; turn?: 'ok' | 'fail' | 'unknown'; protocol?: 'ok' | 'warn' }>({});
   
   // Room state
   const [view, setView] = useState<AppView>('welcome');
@@ -78,6 +83,7 @@ function App() {
       console.warn('Failed to restore session', err);
     }
   }, [roomCode]);
+
 
   // Auto-rejoin on resume/visibilitychange
   useEffect(() => {
@@ -134,6 +140,14 @@ function App() {
     }
   });
   
+  const addToast = useCallback((message: string, tone: 'info' | 'warning' | 'error' = 'info') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, tone }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  }, []);
+
   // Signaling callbacks
   const handleInvite = useCallback((invite: InviteMessage) => {
     console.log('Received invite from:', invite.fromDisplayName);
@@ -155,12 +169,14 @@ function App() {
     console.log('Invite expired:', inviteId);
     // Clear modal if it was for this invite
     setPendingInviteFrom(null);
-  }, []);
+      addToast('Invite expired', 'warning');
+    }, [addToast]);
   
   const handleInviteCancelled = useCallback(() => {
     console.log('Invite cancelled');
     setPendingInviteFrom(null);
-  }, []);
+      addToast('Invite cancelled', 'info');
+    }, [addToast]);
   
   const handleSignalMessage = useCallback((from: string, payload: RTCSessionDescriptionInit | RTCIceCandidateInit) => {
     console.log('Received signal from:', from);
@@ -181,6 +197,73 @@ function App() {
     console.error('Error:', message);
   }, []);
 
+  const runPreflight = useCallback(async () => {
+    const results: { mic?: 'ok' | 'blocked'; autoplay?: 'ok' | 'blocked'; turn?: 'ok' | 'fail' | 'unknown'; protocol?: 'ok' | 'warn' } = {};
+
+    results.protocol = window.location.protocol === 'https:' || window.location.hostname === 'localhost' ? 'ok' : 'warn';
+
+    try {
+      if ((navigator as any).permissions) {
+        const status = await (navigator as any).permissions.query({ name: 'microphone' as PermissionName });
+        results.mic = status.state === 'denied' ? 'blocked' : 'ok';
+      } else {
+        results.mic = 'ok';
+      }
+    } catch (err) {
+      results.mic = 'unknown' as any;
+    }
+
+    try {
+      const ctx = new AudioContext();
+      await ctx.resume();
+      results.autoplay = 'ok';
+      await ctx.close();
+    } catch (err) {
+      results.autoplay = 'blocked';
+    }
+
+    // TURN reachability: look for a relay candidate within a short window
+    try {
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS.iceServers });
+      pc.createDataChannel('probe');
+      const done = new Promise<'ok' | 'fail' | 'unknown'>((resolve) => {
+        const timer = setTimeout(() => {
+          resolve('fail');
+          pc.close();
+        }, 2500);
+
+        pc.onicecandidate = (ev) => {
+          if (ev.candidate && ev.candidate.candidate.includes('relay')) {
+            clearTimeout(timer);
+            resolve('ok');
+            pc.close();
+          }
+        };
+
+        pc.onicegatheringstatechange = () => {
+
+          useEffect(() => {
+            if (roomCode && (view === 'host' || view === 'idle' || view === 'speaker')) {
+              runPreflight();
+            }
+          }, [roomCode, view, runPreflight]);
+          if (pc.iceGatheringState === 'complete') {
+            // No relay found
+            clearTimeout(timer);
+            resolve('fail');
+            pc.close();
+          }
+        };
+      });
+
+      results.turn = await done;
+    } catch (err) {
+      results.turn = 'unknown';
+    }
+
+    setPreflight(results);
+  }, []);
+
   const handlePlayCommand = useCallback((command: 'play' | 'pause' | 'stop', timestamp?: number) => {
     if (command === 'play' && typeof timestamp === 'number') {
       setHostPlayTimestamp(timestamp);
@@ -191,6 +274,7 @@ function App() {
   const {
     status,
     latencyMs,
+    lastMessageAt,
     clients,
     myDisplayName,
     myRole,
@@ -205,7 +289,7 @@ function App() {
   } = useSignaling({
     roomId: roomCode,
     clientId,
-    displayName: selectedAnimal?.name || 'device',
+    displayName,
     role: view === 'host' ? 'host' : 'idle',
     onInvite: handleInvite,
     onInviteResponse: handleInviteResponse,
@@ -220,6 +304,35 @@ function App() {
   // Store sendSignal ref for WebRTC callbacks
   const sendSignalRef = useRef(sendSignal);
   sendSignalRef.current = sendSignal;
+
+  const hadConnectedRef = useRef(false);
+  useEffect(() => {
+    if (status === 'connected') {
+      hadConnectedRef.current = true;
+    }
+  }, [status]);
+
+  const lastPacketAgeMs = useMemo(() => {
+    return lastMessageAt ? Date.now() - lastMessageAt : null;
+  }, [lastMessageAt]);
+
+  const badgeStatus: ConnectionStatus = useMemo(() => {
+    if (status === 'connected') {
+      const jittery = (latencyMs ?? 0) > 250 || (lastPacketAgeMs ?? 0) > 15000;
+      return jittery ? 'unstable' : 'connected';
+    }
+    if (status === 'connecting' && hadConnectedRef.current) return 'reconnecting';
+    return status;
+  }, [status, latencyMs, lastPacketAgeMs]);
+
+  const preflightChips = useMemo(() => {
+    const chips: Array<{ label: string; tone: 'ok' | 'warn' | 'error' }> = [];
+    if (preflight.mic) chips.push({ label: preflight.mic === 'ok' ? 'Mic ready' : 'Mic blocked', tone: preflight.mic === 'ok' ? 'ok' : 'warn' });
+    if (preflight.autoplay) chips.push({ label: preflight.autoplay === 'ok' ? 'Autoplay ready' : 'Autoplay blocked', tone: preflight.autoplay === 'ok' ? 'ok' : 'warn' });
+    if (preflight.turn) chips.push({ label: preflight.turn === 'ok' ? 'TURN reachable' : preflight.turn === 'fail' ? 'TURN failed' : 'TURN unknown', tone: preflight.turn === 'ok' ? 'ok' : preflight.turn === 'fail' ? 'error' : 'warn' });
+    if (preflight.protocol) chips.push({ label: preflight.protocol === 'ok' ? 'HTTPS ready' : 'Use HTTPS for media', tone: preflight.protocol === 'ok' ? 'ok' : 'warn' });
+    return chips;
+  }, [preflight]);
   
   // Update view based on role
   useEffect(() => {
@@ -251,17 +364,33 @@ function App() {
     storeDisplayName(animal.name);
   };
   
-  const handleCreateRoom = () => {
-    if (!selectedAnimal) return;
-    const code = generateRoomCode();
-    setRoomCode(code);
-    setView('host');
+  const handleSelectRole = (role: 'host' | 'speaker') => {
+    setSelectedRole(role);
   };
-  
-  const handleJoinRoom = () => {
-    if (!selectedAnimal || !joinRoomCode) return;
-    setRoomCode(joinRoomCode.toUpperCase());
-    setView('idle');
+
+  const handleProfileContinue = () => {
+    if (!selectedRole) {
+      addToast('Choose Host or Speaker to continue', 'warning');
+      return;
+    }
+    const finalName = customName.trim() || selectedAnimal?.name || 'device';
+    setDisplayName(finalName);
+    storeDisplayName(finalName);
+
+    if (selectedRole === 'host') {
+      const code = generateRoomCode();
+      setRoomCode(code);
+      setView('host');
+      runPreflight();
+    } else {
+      if (!joinRoomCode) {
+        addToast('Enter a room code to join as speaker', 'warning');
+        return;
+      }
+      setRoomCode(joinRoomCode.toUpperCase());
+      setView('idle');
+      runPreflight();
+    }
   };
   
   const handleAcceptInvite = () => {
@@ -362,52 +491,72 @@ function App() {
       
       {/* Welcome / Setup View */}
       {view === 'welcome' && (
-        <>
-          <AnimalSelector 
-            selectedAnimal={selectedAnimal} 
-            onSelect={handleSelectAnimal} 
-          />
-          
-          {selectedAnimal && (
-            <div className="card">
-              <div className="text-center mb-4">
-                <span style={{ fontSize: '3rem' }}>{selectedAnimal.emoji}</span>
-                <p className="mt-2">You are <strong>{selectedAnimal.name}</strong></p>
-              </div>
-              
-              <div className="flex flex-col gap-4">
-                <button className="btn btn-primary" onClick={handleCreateRoom}>
-                  🎙️ Create Room (Host)
-                </button>
-                
-                <div className="text-center text-muted">or</div>
-                
-                <div className="input-group">
-                  <label htmlFor="room-code-input">Join Room</label>
-                  <input
-                    id="room-code-input"
-                    name="roomCode"
-                    className="input"
-                    type="text"
-                    placeholder="Enter room code"
-                    value={joinRoomCode}
-                    onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
-                    maxLength={6}
-                    autoComplete="off"
-                  />
+        <div className="grid grid-two">
+          <div className="card">
+            <h2>Step 1: Choose role</h2>
+            <p className="text-muted mb-3">Host streams audio; Speaker plays it.</p>
+            <div className="role-grid">
+              <button className={`role-card ${selectedRole === 'host' ? 'selected' : ''}`} onClick={() => handleSelectRole('host')}>
+                <div className="role-icon">🎙️</div>
+                <div>
+                  <div className="role-title">Host</div>
+                  <div className="role-text">Capture and send audio</div>
                 </div>
-                
-                <button 
-                  className="btn btn-secondary" 
-                  onClick={handleJoinRoom}
-                  disabled={!joinRoomCode}
-                >
-                  📱 Join as Speaker
-                </button>
-              </div>
+              </button>
+              <button className={`role-card ${selectedRole === 'speaker' ? 'selected' : ''}`} onClick={() => handleSelectRole('speaker')}>
+                <div className="role-icon">🔊</div>
+                <div>
+                  <div className="role-title">Speaker</div>
+                  <div className="role-text">Receive and play audio</div>
+                </div>
+              </button>
             </div>
-          )}
-        </>
+          </div>
+
+          <div className="card">
+            <h2>Step 2: Profile</h2>
+            <p className="text-muted mb-3">Pick a name and icon for this device.</p>
+            <div className="input-group">
+              <label htmlFor="name-input">Display name</label>
+              <input
+                id="name-input"
+                className="input"
+                type="text"
+                placeholder="e.g. LivingRoom"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+              />
+            </div>
+            <AnimalSelector selectedAnimal={selectedAnimal} onSelect={handleSelectAnimal} />
+
+            {selectedRole === 'speaker' && (
+              <div className="input-group">
+                <label htmlFor="room-code-input">Room code</label>
+                <input
+                  id="room-code-input"
+                  className="input"
+                  type="text"
+                  placeholder="ABC123"
+                  value={joinRoomCode}
+                  onChange={(e) => setJoinRoomCode(e.target.value.toUpperCase())}
+                  maxLength={6}
+                  autoComplete="off"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              {selectedRole && (
+                <button className="btn btn-secondary" onClick={() => setSelectedRole(null)}>
+                  ◀ Back
+                </button>
+              )}
+              <button className="btn btn-primary" onClick={handleProfileContinue} disabled={!selectedRole || (selectedRole === 'speaker' && !joinRoomCode)}>
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       
       {/* Host View */}
@@ -419,7 +568,7 @@ function App() {
               <strong>{myDisplayName}</strong>
               <span className="device-role host ml-2">HOST</span>
             </div>
-            <StatusBadge status={status} latencyMs={latencyMs} />
+            <StatusBadge status={badgeStatus} latencyMs={latencyMs} lastPacketAgeMs={lastPacketAgeMs} />
             {status === 'disconnected' && (
               <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
                 🔄 Reconnect
@@ -428,6 +577,14 @@ function App() {
           </div>
           
           <RoomInfo roomCode={roomCode} />
+
+          {preflightChips.length > 0 && (
+            <div className="chip-row mb-3">
+              {preflightChips.map((chip, idx) => (
+                <span key={idx} className={`chip ${chip.tone}`}>{chip.label}</span>
+              ))}
+            </div>
+          )}
           
           <AudioCapture onStreamReady={handleStreamReady} />
           
@@ -459,7 +616,7 @@ function App() {
               <strong>{myDisplayName}</strong>
               <span className="device-role idle ml-2">WAITING</span>
             </div>
-            <StatusBadge status={status} latencyMs={latencyMs} />
+            <StatusBadge status={badgeStatus} latencyMs={latencyMs} lastPacketAgeMs={lastPacketAgeMs} />
             {status === 'disconnected' && (
               <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
                 🔄 Reconnect
@@ -474,6 +631,13 @@ function App() {
               <p className="text-muted">
                 Room: <strong>{roomCode}</strong>
               </p>
+              {preflightChips.length > 0 && (
+                <div className="chip-row mt-2">
+                  {preflightChips.map((chip, idx) => (
+                    <span key={idx} className={`chip ${chip.tone}`}>{chip.label}</span>
+                  ))}
+                </div>
+              )}
               <p className="text-muted mt-2">
                 The host will invite you to become a speaker
               </p>
@@ -516,8 +680,9 @@ function App() {
           remoteStream={remoteStream}
           isConnected={isRTCConnected}
           onLeave={handleLeaveRoom}
-          wsStatus={status}
+          wsStatus={badgeStatus}
           latencyMs={latencyMs}
+          lastPacketAgeMs={lastPacketAgeMs}
           hostTimestampMs={hostPlayTimestamp ?? undefined}
           onReconnect={manualReconnect}
           onRefresh={handleSpeakerRefresh}
@@ -532,6 +697,14 @@ function App() {
           onDecline={handleDeclineInvite}
         />
       )}
+
+      <div className="toast-container">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast ${toast.tone || 'info'}`}>
+            {toast.message}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

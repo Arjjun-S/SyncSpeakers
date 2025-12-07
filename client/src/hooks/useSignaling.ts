@@ -96,6 +96,7 @@ export function useSignaling(options: UseSignalingOptions) {
   const reconnectTimeoutRef = useRef<number | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const lastPingRef = useRef<number | null>(null);
+  const lastMessageAtRef = useRef<number | null>(null);
   const isIntentionalCloseRef = useRef(false);
   const reconnectCountRef = useRef(0);
   const mountedRef = useRef(true);
@@ -106,6 +107,7 @@ export function useSignaling(options: UseSignalingOptions) {
 
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [lastMessageAt, setLastMessageAt] = useState<number | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [myDisplayName, setMyDisplayName] = useState(displayName);
   const [myRole, setMyRole] = useState<"idle" | "host" | "speaker">(role);
@@ -196,6 +198,9 @@ export function useSignaling(options: UseSignalingOptions) {
         try {
           const message: ServerMessage = JSON.parse(event.data);
           const opts = callbacksRef.current;
+          const now = Date.now();
+          lastMessageAtRef.current = now;
+          setLastMessageAt(now);
 
           if (message.type === "pong") {
             if (lastPingRef.current) {
@@ -483,6 +488,7 @@ export function useSignaling(options: UseSignalingOptions) {
   return {
     status,
     latencyMs,
+    lastMessageAt,
     clients,
     myDisplayName,
     myRole,

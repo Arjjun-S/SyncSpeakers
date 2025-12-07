@@ -8,9 +8,8 @@ interface AnimalSelectorProps {
 
 export function AnimalSelector({ selectedAnimal, onSelect }: AnimalSelectorProps) {
   return (
-    <div className="card">
-      <h2>Choose Your Device Name</h2>
-      <p className="text-muted mb-4">Pick an animal to represent your device</p>
+    <div>
+      <h3 style={{ marginBottom: '8px' }}>Pick an icon</h3>
       <div className="animal-grid">
         {ANIMALS.map((animal) => (
           <button
