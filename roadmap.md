@@ -18,10 +18,10 @@ A simple, reliable checklist for reducing lag, staying alive during sleep, and w
 - [x] Step 3: Host capture tuning
   - [x] Use Opus constraints: `sampleRate 48000`, `channelCount 1`, `echoCancellation true`, `noiseSuppression true`, `autoGainControl false`.
   - [x] Set sender `maxBitrate ~64kbps`, `priority high`, `degradationPreference maintain-framerate`.
-- [ ] Step 4: Speaker playback smoothing
-  - [ ] Play remote audio through Web Audio with a small jitter buffer (80–150 ms).
-  - [ ] Add fast catch-up when buffer grows; expose a safe default.
-  - [ ] Add drift correction using host timestamp in play commands.
+- [x] Step 4: Speaker playback smoothing
+  - [x] Play remote audio through Web Audio with a small jitter buffer (80–150 ms).
+  - [x] Add fast catch-up when buffer grows; expose a safe default.
+  - [x] Add drift correction using host timestamp in play commands.
 
 ## Resilience & Sleep
 

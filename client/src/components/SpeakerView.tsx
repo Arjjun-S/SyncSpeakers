@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { getAnimalEmoji, ConnectionStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
 
@@ -10,6 +10,7 @@ interface SpeakerViewProps {
   onLeave: () => void;
   wsStatus?: ConnectionStatus;
   latencyMs?: number | null;
+  hostTimestampMs?: number;
   onReconnect?: () => void;
 }
 
@@ -21,43 +22,117 @@ export function SpeakerView({
   onLeave,
   wsStatus = 'connected',
   latencyMs,
+  hostTimestampMs,
   onReconnect
 }: SpeakerViewProps) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+  const delayRef = useRef<DelayNode | null>(null);
   const [volume, setVolume] = useState(1);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const targetDelayMs = 120;
+  const minDelayMs = 80;
+  const maxDelayMs = 150;
+
+  const ensureContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+    }
+    return audioContextRef.current;
+  }, []);
+
+  const tearDown = useCallback(() => {
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
+    }
+    if (gainRef.current) {
+      gainRef.current.disconnect();
+      gainRef.current = null;
+    }
+    if (delayRef.current) {
+      delayRef.current.disconnect();
+      delayRef.current = null;
+    }
+  }, []);
+
+  const setupPipeline = useCallback(async (stream: MediaStream) => {
+    const ctx = ensureContext();
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+
+    tearDown();
+
+    const source = ctx.createMediaStreamSource(stream);
+    const delay = ctx.createDelay(maxDelayMs / 1000);
+    delay.delayTime.value = targetDelayMs / 1000;
+
+    const gain = ctx.createGain();
+    gain.gain.value = volume;
+
+    source.connect(delay).connect(gain).connect(ctx.destination);
+
+    sourceRef.current = source;
+    delayRef.current = delay;
+    gainRef.current = gain;
+    setIsPlaying(true);
+  }, [ensureContext, targetDelayMs, maxDelayMs, volume, tearDown]);
 
   useEffect(() => {
-    if (audioRef.current && remoteStream) {
-      audioRef.current.srcObject = remoteStream;
-      audioRef.current.play().catch(() => {
-        console.log('Autoplay blocked, waiting for user interaction');
-      });
+    if (remoteStream) {
+      setupPipeline(remoteStream).catch((err: unknown) => console.error('Audio pipeline error', err));
+    } else {
+      tearDown();
+      setIsPlaying(false);
     }
-  }, [remoteStream]);
-
-  const handlePlay = async () => {
-    if (audioRef.current) {
-      try {
-        await audioRef.current.play();
-        setIsPlaying(true);
-      } catch (error) {
-        console.error('Playback failed:', error);
-      }
-    }
-  };
+    return () => {
+      tearDown();
+    };
+  }, [remoteStream, setupPipeline, tearDown]);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume;
+    if (gainRef.current) {
+      gainRef.current.gain.value = newVolume;
+    }
+  };
+
+  const applyDriftCorrection = useCallback((hostTs: number) => {
+    const delay = delayRef.current;
+    if (!delay) return;
+    const now = Date.now();
+    const skewMs = now - hostTs;
+    // Aim to keep around targetDelayMs; adjust within bounds
+    if (skewMs - targetDelayMs > 60) {
+      delay.delayTime.value = Math.max(minDelayMs / 1000, targetDelayMs / 1000 - 0.03);
+    } else if (targetDelayMs - skewMs > 60) {
+      delay.delayTime.value = Math.min(maxDelayMs / 1000, targetDelayMs / 1000 + 0.02);
+    } else {
+      delay.delayTime.value = targetDelayMs / 1000;
+    }
+  }, [minDelayMs, maxDelayMs, targetDelayMs]);
+
+  useEffect(() => {
+    if (hostTimestampMs) {
+      applyDriftCorrection(hostTimestampMs);
+    }
+  }, [hostTimestampMs, applyDriftCorrection]);
+
+  const handlePlay = async () => {
+    if (!remoteStream) return;
+    try {
+      await setupPipeline(remoteStream);
+    } catch (err) {
+      console.error('Playback resume failed', err);
     }
   };
 
   return (
     <div className="card">
-      <audio ref={audioRef} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
       
       <div className="speaker-status">
         <div className="emoji">{getAnimalEmoji(displayName)}</div>

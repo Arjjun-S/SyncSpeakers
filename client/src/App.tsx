@@ -43,6 +43,7 @@ function App() {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const hostClientIdRef = useRef<string | null>(null);
   const [isRTCConnected, setIsRTCConnected] = useState(false);
+  const [hostPlayTimestamp, setHostPlayTimestamp] = useState<number | null>(null);
   
   // Check URL for room code
   useEffect(() => {
@@ -121,6 +122,12 @@ function App() {
   const handleError = useCallback((message: string) => {
     console.error('Error:', message);
   }, []);
+
+  const handlePlayCommand = useCallback((command: 'play' | 'pause' | 'stop', timestamp?: number) => {
+    if (command === 'play' && typeof timestamp === 'number') {
+      setHostPlayTimestamp(timestamp);
+    }
+  }, []);
   
   // Signaling hook
   const {
@@ -134,6 +141,7 @@ function App() {
     respondToInvite,
     cancelInvite,
     sendSignal,
+    sendPlayCommand,
     leave,
     manualReconnect
   } = useSignaling({
@@ -147,6 +155,7 @@ function App() {
     onInviteCancelled: handleInviteCancelled,
     onSignal: handleSignalMessage,
     onHostDisconnected: handleHostDisconnected,
+    onPlayCommand: handlePlayCommand,
     onError: handleError
   });
   
@@ -199,6 +208,7 @@ function App() {
     console.log('Audio stream ready');
     localStreamRef.current = stream;
     setLocalStream(stream);
+    sendPlayCommand('play');
     
     // If there are already speakers, create offers for them
     clients
@@ -389,6 +399,7 @@ function App() {
           onLeave={handleLeaveRoom}
           wsStatus={status}
           latencyMs={latencyMs}
+          hostTimestampMs={hostPlayTimestamp ?? undefined}
           onReconnect={manualReconnect}
         />
       )}
