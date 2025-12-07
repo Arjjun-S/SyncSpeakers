@@ -209,10 +209,10 @@ function App() {
   
   // Update view based on role
   useEffect(() => {
-    if ((myRole as string) === 'speaker' && view !== 'speaker') {
+    if (roomCode && (myRole as string) === 'speaker' && view !== 'speaker') {
       setView('speaker');
     }
-  }, [myRole, view]);
+  }, [myRole, view, roomCode]);
   
   // Handlers
   const handleSelectRole = (role: 'host' | 'speaker') => {
@@ -269,6 +269,7 @@ function App() {
     closeAllConnections();
     setRoomCode('');
     setJoinRoomCode('');
+    setSelectedRole(null);
     setView('welcome');
     setStep(1);
     setRemoteStream(null);
