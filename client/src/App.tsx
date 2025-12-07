@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { AdaptivePanel } from './components/AdaptivePanel';
 import { DeviceList } from './components/DeviceList';
 import { InviteModal } from './components/InviteModal';
 import { AudioCapture } from './components/AudioCapture';
@@ -357,114 +358,116 @@ function App() {
   
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">SyncSpeakers</p>
-          <h1>Get connected in three quick steps</h1>
-          <p className="text-muted">Move through role, profile, and room setup—then go live.</p>
-        </div>
-        <div className="status-chip">
-          <span className="chip-icon">{getAnimalEmoji(myDisplayName)}</span>
+      <AdaptivePanel maxWidth={1120}>
+        <header className="topbar">
           <div>
-            <div className="chip-title">{myDisplayName || 'Not set'}</div>
-            <div className="chip-sub"><StatusBadge status={status} /> {roomCode ? `• Room ${roomCode}` : '• Offline'}</div>
+            <p className="eyebrow">SyncSpeakers</p>
+            <h1>Get connected in three quick steps</h1>
+            <p className="text-muted">Move through role, profile, and room setup—then go live.</p>
           </div>
-        </div>
-      </header>
-
-      {inviteNotice && (
-        <div
-          style={{
-            background: 'var(--card-bg, #f8f9fb)',
-            border: '1px solid var(--border, #e5e7eb)',
-            color: 'var(--text, #111827)',
-            padding: '12px 14px',
-            borderRadius: '12px',
-            marginBottom: '12px'
-          }}
-        >
-          ℹ️ {inviteNotice}
-        </div>
-      )}
-
-      {view === 'welcome' && renderWizard()}
-
-      {view !== 'welcome' && (
-        <div className="stack">
-          {view === 'idle' && (
-            <div className="card">
-              <div className="row-between">
-                <div>
-                  <p className="eyebrow">Waiting</p>
-                  <h2>Waiting for host</h2>
-                  <p className="text-muted">Room {roomCode || '—'} • You will be invited to speak</p>
-                </div>
-                <span className="hero-emoji">⏳</span>
-              </div>
-              <div className="tag-list">
-                {clients.map(client => (
-                  <span key={client.clientId} className={`chip-outline ${client.clientId === clientId ? 'chip-active' : ''}`}>
-                    {getAnimalEmoji(client.displayName)} {client.displayName} ({client.role})
-                  </span>
-                ))}
-              </div>
-              <div className="wizard-nav">
-                <button className="btn btn-secondary" onClick={handleLeaveRoom}>✋ Leave</button>
-              </div>
+          <div className="status-chip">
+            <span className="chip-icon">{getAnimalEmoji(myDisplayName)}</span>
+            <div>
+              <div className="chip-title">{myDisplayName || 'Not set'}</div>
+              <div className="chip-sub"><StatusBadge status={status} /> {roomCode ? `• Room ${roomCode}` : '• Offline'}</div>
             </div>
-          )}
+          </div>
+        </header>
 
-          {view === 'host' && (
-            <>
+        {inviteNotice && (
+          <div
+            style={{
+              background: 'var(--card-bg, #f8f9fb)',
+              border: '1px solid var(--border, #e5e7eb)',
+              color: 'var(--text, #111827)',
+              padding: '12px 14px',
+              borderRadius: '12px',
+              marginBottom: '12px'
+            }}
+          >
+            ℹ️ {inviteNotice}
+          </div>
+        )}
+
+        {view === 'welcome' && renderWizard()}
+
+        {view !== 'welcome' && (
+          <div className="stack">
+            {view === 'idle' && (
               <div className="card">
                 <div className="row-between">
                   <div>
-                    <p className="eyebrow">Broadcast</p>
-                    <h2>Share your audio</h2>
-                    <p className="text-muted">Start capturing a tab or screen with audio</p>
+                    <p className="eyebrow">Waiting</p>
+                    <h2>Waiting for host</h2>
+                    <p className="text-muted">Room {roomCode || '—'} • You will be invited to speak</p>
                   </div>
-                  {status === 'disconnected' && (
-                    <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>🔄 Reconnect</button>
-                  )}
+                  <span className="hero-emoji">⏳</span>
                 </div>
-                <AudioCapture onStreamReady={handleStreamReady} />
-              </div>
-
-              <div className="device-section">
-                <DeviceList
-                  clients={clients}
-                  pendingInvites={pendingInvites}
-                  myClientId={clientId}
-                  isHost={true}
-                  onInvite={invite}
-                  onCancelInvite={cancelInvite}
-                />
-
-                <div className="card card-compact room-card">
-                  <h3>Room Code</h3>
-                  <RoomInfo roomCode={roomCode} showShare={false} qrSize={140} compact />
+                <div className="tag-list">
+                  {clients.map(client => (
+                    <span key={client.clientId} className={`chip-outline ${client.clientId === clientId ? 'chip-active' : ''}`}>
+                      {getAnimalEmoji(client.displayName)} {client.displayName} ({client.role})
+                    </span>
+                  ))}
+                </div>
+                <div className="wizard-nav">
+                  <button className="btn btn-secondary" onClick={handleLeaveRoom}>✋ Leave</button>
                 </div>
               </div>
+            )}
 
-              <button className="btn btn-danger" onClick={handleLeaveRoom}>
-                End session
-              </button>
-            </>
-          )}
+            {view === 'host' && (
+              <>
+                <div className="card">
+                  <div className="row-between">
+                    <div>
+                      <p className="eyebrow">Broadcast</p>
+                      <h2>Share your audio</h2>
+                      <p className="text-muted">Start capturing a tab or screen with audio</p>
+                    </div>
+                    {status === 'disconnected' && (
+                      <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>🔄 Reconnect</button>
+                    )}
+                  </div>
+                  <AudioCapture onStreamReady={handleStreamReady} />
+                </div>
 
-          {view === 'speaker' && (
-            <SpeakerView
-              displayName={myDisplayName}
-              hostDisplayName={hostInfo?.displayName || 'Host'}
-              remoteStream={remoteStream}
-              isConnected={isRTCConnected}
-              onLeave={handleLeaveRoom}
-              wsStatus={status}
-              onReconnect={manualReconnect}
-            />
-          )}
-        </div>
-      )}
+                <div className="device-section">
+                  <DeviceList
+                    clients={clients}
+                    pendingInvites={pendingInvites}
+                    myClientId={clientId}
+                    isHost={true}
+                    onInvite={invite}
+                    onCancelInvite={cancelInvite}
+                  />
+
+                  <div className="card card-compact room-card">
+                    <h3>Room Code</h3>
+                    <RoomInfo roomCode={roomCode} showShare={false} qrSize={140} compact />
+                  </div>
+                </div>
+
+                <button className="btn btn-danger" onClick={handleLeaveRoom}>
+                  End session
+                </button>
+              </>
+            )}
+
+            {view === 'speaker' && (
+              <SpeakerView
+                displayName={myDisplayName}
+                hostDisplayName={hostInfo?.displayName || 'Host'}
+                remoteStream={remoteStream}
+                isConnected={isRTCConnected}
+                onLeave={handleLeaveRoom}
+                wsStatus={status}
+                onReconnect={manualReconnect}
+              />
+            )}
+          </div>
+        )}
+      </AdaptivePanel>
 
       {pendingInviteFrom && (
         <InviteModal

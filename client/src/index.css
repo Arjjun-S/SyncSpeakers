@@ -49,6 +49,21 @@ body {
   gap: 20px;
 }
 
+.adaptive-panel {
+  width: 100%;
+  max-width: var(--adaptive-max, 1080px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--adaptive-gap, 16px);
+  padding-inline: clamp(8px, 3vw, 18px);
+}
+
+.adaptive-panel-center > * {
+  width: min(100%, 760px);
+  align-self: center;
+}
+
 /* Top bar */
 .topbar {
   display: flex;
@@ -1078,5 +1093,54 @@ body {
   }
   50% {
     transform: scaleY(1);
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 20px 12px 40px;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .status-chip {
+    width: 100%;
+  }
+
+  .row-between {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .wizard-nav {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wizard-nav .btn {
+    width: 100%;
+  }
+
+  .device-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .device-section {
+    grid-template-columns: 1fr;
+  }
+
+  .room-code {
+    font-size: 1.4rem;
+    letter-spacing: 0.2em;
+  }
+
+  .chip-outline {
+    width: 100%;
+    justify-content: space-between;
   }
 }

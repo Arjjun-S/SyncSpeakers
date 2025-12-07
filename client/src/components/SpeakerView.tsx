@@ -110,13 +110,7 @@ export function SpeakerView({
             )}
           </>
         ) : (
-          <>
-            <span className="status-badge connecting">
-              <span className="status-dot" />
-              Connecting...
-            </span>
-            <p className="text-muted mt-4">Establishing connection with host</p>
-          </>
+          <p className="text-muted mt-2">Establishing connection with host</p>
         )}
       </div>
       
