@@ -30,12 +30,14 @@ const getWsUrl = () => {
   }
 
   if (isBrowser && window.location.hostname.includes("onrender.com")) {
-    const wsUrl = "wss://syncspeakers.onrender.com";
-    console.log("Using hardcoded Render WS URL:", wsUrl);
+    const wsUrl = `${window.location.protocol === "https:" ? "wss" : "ws"}://${
+      window.location.host
+    }`;
+    console.log("Using Render host WS URL:", wsUrl);
     return wsUrl;
   }
 
-  const host = isBrowser ? window.location.hostname : "localhost";
+  const host = isBrowser ? window.location.hostname : "127.0.0.1";
   const port = envPort || "8080";
   const url = `${isHttps ? "wss" : "ws"}://${host}${port ? `:${port}` : ""}`;
   console.log("Using fallback WS URL:", url);
@@ -446,6 +448,7 @@ export function useSignaling(options: UseSignalingOptions) {
 
     setStatus("disconnected");
     setLatencyMs(null);
+    setMyRole("idle");
     setClients([]);
     setPendingInvites([]);
   }, [cleanup, send, roomId, clientId]);

@@ -33,7 +33,7 @@ function App() {
   const [customName, setCustomName] = useState<string>(() => getStoredDisplayName() || '');
   const [selectedRole, setSelectedRole] = useState<'host' | 'speaker' | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; tone?: 'info' | 'warning' | 'error' }>>([]);
-  const [preflight, setPreflight] = useState<{ mic?: 'ok' | 'blocked'; autoplay?: 'ok' | 'blocked'; turn?: 'ok' | 'fail' | 'unknown'; protocol?: 'ok' | 'warn' }>({});
+  const [preflight, setPreflight] = useState<{ mic?: 'ok' | 'blocked'; autoplay?: 'ok' | 'blocked'; turn?: 'ok' | 'fail' | 'unknown' | 'off'; protocol?: 'ok' | 'warn' }>({});
   
   // Room state
   const [view, setView] = useState<AppView>('welcome');
@@ -196,7 +196,7 @@ function App() {
   }, []);
 
   const runPreflight = useCallback(async () => {
-    const results: { mic?: 'ok' | 'blocked'; autoplay?: 'ok' | 'blocked'; turn?: 'ok' | 'fail' | 'unknown'; protocol?: 'ok' | 'warn' } = {};
+    const results: { mic?: 'ok' | 'blocked'; autoplay?: 'ok' | 'blocked'; turn?: 'ok' | 'fail' | 'unknown' | 'off'; protocol?: 'ok' | 'warn' } = {};
 
     results.protocol = window.location.protocol === 'https:' || window.location.hostname === 'localhost' ? 'ok' : 'warn';
 
@@ -224,7 +224,7 @@ function App() {
 
     // TURN reachability: probe only if TURN URLs are configured
     if (!turnConfigured) {
-      results.turn = 'unknown';
+      results.turn = 'off'; // Render STUN-only mode
     } else {
       try {
         const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS.iceServers });
@@ -333,7 +333,23 @@ function App() {
     const chips: Array<{ label: string; tone: 'ok' | 'warn' | 'error' }> = [];
     if (preflight.mic) chips.push({ label: preflight.mic === 'ok' ? 'Mic ready' : 'Mic blocked', tone: preflight.mic === 'ok' ? 'ok' : 'warn' });
     if (preflight.autoplay) chips.push({ label: preflight.autoplay === 'ok' ? 'Autoplay ready' : 'Autoplay blocked', tone: preflight.autoplay === 'ok' ? 'ok' : 'warn' });
-    if (preflight.turn) chips.push({ label: preflight.turn === 'ok' ? 'TURN reachable' : preflight.turn === 'fail' ? 'TURN failed' : 'TURN unknown', tone: preflight.turn === 'ok' ? 'ok' : preflight.turn === 'fail' ? 'error' : 'warn' });
+    if (preflight.turn) {
+      const turnLabel =
+        preflight.turn === 'ok'
+          ? 'TURN reachable'
+          : preflight.turn === 'fail'
+            ? 'TURN failed'
+            : preflight.turn === 'off'
+              ? 'TURN off (Render/STUN only)'
+              : 'TURN unknown';
+      const turnTone: 'ok' | 'warn' | 'error' =
+        preflight.turn === 'ok'
+          ? 'ok'
+          : preflight.turn === 'fail'
+            ? 'error'
+            : 'warn';
+      chips.push({ label: turnLabel, tone: turnTone });
+    }
     if (preflight.protocol) chips.push({ label: preflight.protocol === 'ok' ? 'HTTPS ready' : 'Use HTTPS for media', tone: preflight.protocol === 'ok' ? 'ok' : 'warn' });
     return chips;
   }, [preflight]);
@@ -485,6 +501,7 @@ function App() {
   
   // Find host display name for speaker view
   const hostInfo = clients.find(c => c.role === 'host');
+  const speakerLinkConnected = isRTCConnected || (view === 'speaker' && status === 'connected');
   
   return (
     <div className="app">
@@ -561,7 +578,7 @@ function App() {
             displayName={myDisplayName}
             hostDisplayName={hostInfo?.displayName || 'Host'}
             remoteStream={remoteStream}
-            isConnected={isRTCConnected}
+            isConnected={speakerLinkConnected}
             onLeave={handleLeaveRoom}
             wsStatus={badgeStatus}
             latencyMs={latencyMs ?? undefined}

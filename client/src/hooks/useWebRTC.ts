@@ -14,6 +14,8 @@ interface UseWebRTCOptions {
   ) => void;
 }
 
+const log = (...args: unknown[]) => console.log("[webrtc]", ...args);
+
 const normalizeTurnUrl = (url: string) => {
   const trimmed = url.trim();
   if (trimmed.startsWith("turn:") || trimmed.startsWith("turns:"))
@@ -119,28 +121,37 @@ export function useWebRTC({
       ) => void
     ) => {
       if (peerConnectionsRef.current.has(peerId)) {
-        console.log(`Peer connection for ${peerId} already exists`);
+        log(`pc:${peerId} already exists`);
         return peerConnectionsRef.current.get(peerId)!;
       }
 
-      console.log(`Creating peer connection for ${peerId}`);
+      log(`pc:${peerId} create`, {
+        iceServers: ICE_SERVERS.iceServers?.length ?? 0,
+      });
       const pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnectionsRef.current.set(peerId, pc);
 
       // Handle ICE candidates
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log(
-            `ICE candidate for ${peerId}:`,
-            event.candidate.candidate.substring(0, 50)
-          );
+          log(`pc:${peerId} ice-candidate`, {
+            type: event.candidate.type,
+            protocol: event.candidate.protocol,
+            address: event.candidate.address,
+            port: event.candidate.port,
+            foundation: event.candidate.foundation,
+          });
           sendSignal(event.candidate.toJSON());
         }
       };
 
+      pc.onicegatheringstatechange = () => {
+        log(`pc:${peerId} ice-gathering`, pc.iceGatheringState);
+      };
+
       // Handle connection state changes
       pc.onconnectionstatechange = () => {
-        console.log(`Connection state for ${peerId}: ${pc.connectionState}`);
+        log(`pc:${peerId} state`, pc.connectionState);
         setConnectionStates((prev) =>
           new Map(prev).set(peerId, pc.connectionState)
         );
@@ -149,9 +160,16 @@ export function useWebRTC({
 
       // Handle remote stream
       pc.ontrack = (event) => {
-        console.log(`Received remote track from ${peerId}`);
-        if (event.streams[0]) {
-          onRemoteStream?.(event.streams[0]);
+        log(`pc:${peerId} ontrack`, {
+          trackId: event.track?.id,
+          kind: event.track?.kind,
+          streams: event.streams?.length ?? 0,
+        });
+        const stream =
+          event.streams?.[0] ??
+          (event.track ? new MediaStream([event.track]) : null);
+        if (stream) {
+          onRemoteStream?.(stream);
         }
       };
 
@@ -162,6 +180,9 @@ export function useWebRTC({
 
   // Set local audio stream (for Host)
   const setLocalStream = useCallback((stream: MediaStream) => {
+    const audioTracks = stream.getAudioTracks().length;
+    const videoTracks = stream.getVideoTracks().length;
+    log("setLocalStream", { audioTracks, videoTracks });
     localStreamRef.current = stream;
   }, []);
 
@@ -188,10 +209,10 @@ export function useWebRTC({
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        console.log(`Created offer for ${peerId}`);
+        log(`pc:${peerId} created offer`);
         sendSignal(offer);
       } catch (error) {
-        console.error("Error creating offer:", error);
+        console.error("[webrtc] Error creating offer", error);
       }
     },
     [createPeerConnection]
@@ -217,26 +238,26 @@ export function useWebRTC({
         // Check if it's an SDP offer/answer
         if ("sdp" in signal && signal.type) {
           if (signal.type === "offer") {
-            console.log(`Received offer from ${peerId}`);
+            log(`pc:${peerId} received offer`);
             await pc.setRemoteDescription(new RTCSessionDescription(signal));
 
             // Create and send answer
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
-            console.log(`Created answer for ${peerId}`);
+            log(`pc:${peerId} created answer`);
             sendSignal(answer);
           } else if (signal.type === "answer") {
-            console.log(`Received answer from ${peerId}`);
+            log(`pc:${peerId} received answer`);
             await pc.setRemoteDescription(new RTCSessionDescription(signal));
           }
         }
         // Check if it's an ICE candidate
         else if ("candidate" in signal) {
-          console.log(`Received ICE candidate from ${peerId}`);
+          log(`pc:${peerId} received candidate`);
           await pc.addIceCandidate(new RTCIceCandidate(signal));
         }
       } catch (error) {
-        console.error("Error handling signal:", error);
+        console.error("[webrtc] Error handling signal", error);
       }
     },
     [createPeerConnection]
@@ -246,6 +267,7 @@ export function useWebRTC({
   const closeConnection = useCallback((peerId: string) => {
     const pc = peerConnectionsRef.current.get(peerId);
     if (pc) {
+      log(`pc:${peerId} close`);
       pc.close();
       peerConnectionsRef.current.delete(peerId);
       setConnectionStates((prev) => {
@@ -264,6 +286,7 @@ export function useWebRTC({
         payload: RTCSessionDescriptionInit | RTCIceCandidateInit
       ) => void
     ) => {
+      log(`pc:${peerId} renegotiate`);
       closeConnection(peerId);
       await createOffer(peerId, sendSignal);
     },
@@ -272,6 +295,7 @@ export function useWebRTC({
 
   // Close all connections
   const closeAllConnections = useCallback(() => {
+    log("close all peer connections");
     peerConnectionsRef.current.forEach((pc) => {
       pc.close();
     });
