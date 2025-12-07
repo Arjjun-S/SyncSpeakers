@@ -164,6 +164,8 @@ export function useWebRTC({
           trackId: event.track?.id,
           kind: event.track?.kind,
           streams: event.streams?.length ?? 0,
+          audioTracks: event.streams?.[0]?.getAudioTracks()?.length ?? 0,
+          videoTracks: event.streams?.[0]?.getVideoTracks()?.length ?? 0,
         });
         const stream =
           event.streams?.[0] ??
@@ -198,7 +200,13 @@ export function useWebRTC({
 
       // Add local tracks if available
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => {
+        const tracks = localStreamRef.current.getTracks();
+        log(`pc:${peerId} attaching local tracks`, {
+          count: tracks.length,
+          kinds: tracks.map((t) => t.kind),
+        });
+
+        tracks.forEach((track) => {
           if (localStreamRef.current) {
             pc.addTrack(track, localStreamRef.current);
           }
