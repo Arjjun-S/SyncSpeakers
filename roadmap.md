@@ -49,3 +49,11 @@ A simple, reliable checklist for reducing lag, staying alive during sleep, and w
   - [x] Rate limit messages per client; validate roomId format; guard duplicate hosts.
   - [x] Add health endpoint and room cleanup timers.
   - [ ] (Optional) Redis presence if scaling horizontally.
+
+## Host Audio Capture
+
+- [x] Step 12: Flexible host audio sources
+  - [x] File/URL in-page playback → `captureStream()` (most efficient, no prompt).
+  - [x] Tab audio capture fallback (`getDisplayMedia` audio-only track, minimal video constraint).
+  - [x] Microphone capture with processing (echo cancellation/noise suppression).
+  - [x] External device/app guidance via tab/system capture as last resort.

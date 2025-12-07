@@ -96,6 +96,13 @@ export function useWakeLock() {
     wantLockRef.current = true;
     setError(null);
 
+    // If page is not visible, skip direct request to avoid NotAllowedError.
+    if (document.visibilityState !== "visible") {
+      setError("Wake lock deferred: page not visible");
+      await startKeepAlive();
+      return "keep-alive";
+    }
+
     const nav = navigator as NavigatorWithWakeLock;
     if (nav.wakeLock) {
       try {

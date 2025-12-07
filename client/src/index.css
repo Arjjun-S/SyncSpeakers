@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
 * {
   margin: 0;
   padding: 0;
@@ -21,8 +23,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
-    Ubuntu, sans-serif;
+  font-family: "Space Grotesk", "SF Pro Text", "Segoe UI", sans-serif;
   background: var(--bg-dark);
   color: var(--text-primary);
   min-height: 100vh;
@@ -894,6 +895,25 @@ body {
 }
 
 /* Audio Capture */
+.audio-card {
+  background: radial-gradient(
+      circle at 20% 20%,
+      rgba(99, 102, 241, 0.1),
+      transparent 45%
+    ),
+    linear-gradient(160deg, #0f172a, #0b1220);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.35);
+  padding: 20px;
+  border-radius: 18px;
+}
+
+.audio-card h3 {
+  letter-spacing: 0.02em;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 .audio-capture-idle,
 .audio-capture-requesting,
 .audio-capture-active,
@@ -902,7 +922,181 @@ body {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 24px;
+  padding: 20px;
+}
+
+.audio-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.audio-card-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.capture-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.capture-grid.condensed {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.capture-option {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 14px;
+  padding: 14px;
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.9),
+    rgba(15, 23, 42, 0.95)
+  );
+  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.capture-option.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4), 0 12px 24px rgba(0, 0, 0, 0.25);
+}
+
+.capture-option .label {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.capture-option .text-muted,
+.capture-option p {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.capture-option .input {
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.capture-option .btn {
+  margin-top: 4px;
+}
+
+.capture-option .input-group {
+  margin-bottom: 12px;
+}
+
+.capture-notes {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 12px;
+}
+
+.tiny {
+  font-size: 0.78rem;
+}
+
+.mt-3 {
+  margin-top: 12px;
+}
+
+.audio-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1200;
+}
+
+.audio-picker-dialog {
+  background: linear-gradient(170deg, #0f172a, #0b1220);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: 16px;
+  padding: 18px;
+  width: min(100%, 980px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+.audio-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.audio-picker-head h4 {
+  font-size: 1.1rem;
+  margin-top: 4px;
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.picker-card {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(23, 32, 52, 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  justify-content: space-between;
+}
+
+.picker-card.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.45);
+}
+
+.picker-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.picker-emoji {
+  font-size: 1.4rem;
+}
+
+.picker-sub {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.picker-list {
+  list-style: none;
+  color: var(--text-muted);
+  display: grid;
+  gap: 4px;
+  padding-left: 0;
+  font-size: 0.92rem;
+}
+
+.picker-list li::before {
+  content: "• ";
 }
 
 .capture-icon {
