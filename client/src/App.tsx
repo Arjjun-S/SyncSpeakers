@@ -11,7 +11,7 @@ import {
   getStoredDisplayName, 
   storeDisplayName 
 } from './hooks/useSignaling';
-import { useWebRTC, ICE_SERVERS } from './hooks/useWebRTC';
+import { useWebRTC, ICE_SERVERS, hasTurnServers } from './hooks/useWebRTC';
 import { useWakeLock } from './hooks/useWakeLock';
 import { ANIMALS, type Animal, type InviteMessage, type ConnectionStatus } from './types';
 
@@ -220,47 +220,53 @@ function App() {
       results.autoplay = 'blocked';
     }
 
-    // TURN reachability: look for a relay candidate within a short window
-    try {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS.iceServers });
-      pc.createDataChannel('probe');
-      const done = new Promise<'ok' | 'fail' | 'unknown'>((resolve) => {
-        const timer = setTimeout(() => {
-          resolve('fail');
-          pc.close();
-        }, 2500);
+    const turnConfigured = hasTurnServers(ICE_SERVERS);
 
-        pc.onicecandidate = (ev) => {
-          if (ev.candidate && ev.candidate.candidate.includes('relay')) {
-            clearTimeout(timer);
-            resolve('ok');
-            pc.close();
-          }
-        };
-
-        pc.onicegatheringstatechange = () => {
-
-          useEffect(() => {
-            if (roomCode && (view === 'host' || view === 'idle' || view === 'speaker')) {
-              runPreflight();
-            }
-          }, [roomCode, view, runPreflight]);
-          if (pc.iceGatheringState === 'complete') {
-            // No relay found
-            clearTimeout(timer);
+    // TURN reachability: probe only if TURN URLs are configured
+    if (!turnConfigured) {
+      results.turn = 'unknown';
+    } else {
+      try {
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS.iceServers });
+        pc.createDataChannel('probe');
+        const done = new Promise<'ok' | 'fail' | 'unknown'>((resolve) => {
+          const timer = setTimeout(() => {
             resolve('fail');
             pc.close();
-          }
-        };
-      });
+          }, 2500);
 
-      results.turn = await done;
-    } catch (err) {
-      results.turn = 'unknown';
+          pc.onicecandidate = (ev) => {
+            if (ev.candidate && ev.candidate.candidate.includes('relay')) {
+              clearTimeout(timer);
+              resolve('ok');
+              pc.close();
+            }
+          };
+
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') {
+              // No relay found
+              clearTimeout(timer);
+              resolve('fail');
+              pc.close();
+            }
+          };
+        });
+
+        results.turn = await done;
+      } catch (err) {
+        results.turn = 'unknown';
+      }
     }
 
     setPreflight(results);
   }, []);
+
+  useEffect(() => {
+    if (roomCode && (view === 'host' || view === 'idle' || view === 'speaker')) {
+      runPreflight();
+    }
+  }, [roomCode, view, runPreflight]);
 
   const handlePlayCommand = useCallback((command: 'play' | 'pause' | 'stop', timestamp?: number) => {
     if (command === 'play' && typeof timestamp === 'number') {

@@ -1,5 +1,11 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 
+type TurnEnv = {
+  VITE_TURN_URLS?: string;
+  VITE_TURN_USERNAME?: string;
+  VITE_TURN_PASSWORD?: string;
+};
+
 interface UseWebRTCOptions {
   onRemoteStream?: (stream: MediaStream) => void;
   onConnectionStateChange?: (
@@ -15,17 +21,36 @@ const normalizeTurnUrl = (url: string) => {
   return `turn:${trimmed}`;
 };
 
-const buildIceServers = (): RTCConfiguration => {
+const hasTurnPrefix = (url: string) =>
+  url.startsWith("turn:") || url.startsWith("turns:");
+
+export const hasTurnServers = (config: RTCConfiguration) => {
+  const { iceServers } = config || {};
+  if (!iceServers || iceServers.length === 0) return false;
+
+  return iceServers.some((server) => {
+    if (!server.urls) return false;
+    const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+    return urls.some(
+      (url) => typeof url === "string" && hasTurnPrefix(url.trim())
+    );
+  });
+};
+
+const getEnv = (): TurnEnv => {
+  const meta = (import.meta as any)?.env ?? {};
+  return meta as TurnEnv;
+};
+
+export const buildIceServers = (env: TurnEnv = getEnv()): RTCConfiguration => {
   const stunDefaults: RTCIceServer[] = [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
   ];
 
-  const turnUrlsRaw = import.meta.env.VITE_TURN_URLS as string | undefined;
-  const turnUsername = import.meta.env.VITE_TURN_USERNAME as string | undefined;
-  const turnCredential = import.meta.env.VITE_TURN_PASSWORD as
-    | string
-    | undefined;
+  const turnUrlsRaw = env.VITE_TURN_URLS;
+  const turnUsername = env.VITE_TURN_USERNAME;
+  const turnCredential = env.VITE_TURN_PASSWORD;
 
   const turnUrls = turnUrlsRaw
     ? turnUrlsRaw
