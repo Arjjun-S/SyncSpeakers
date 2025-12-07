@@ -494,21 +494,29 @@ function App() {
         <div className="grid grid-two">
           <div className="card">
             <h2>Step 1: Choose role</h2>
-            <p className="text-muted mb-3">Host streams audio; Speaker plays it.</p>
+            <p className="text-muted mb-3">Pick how this device participates.</p>
             <div className="role-grid">
-              <button className={`role-card ${selectedRole === 'host' ? 'selected' : ''}`} onClick={() => handleSelectRole('host')}>
-                <div className="role-icon">🎙️</div>
-                <div>
-                  <div className="role-title">Host</div>
-                  <div className="role-text">Capture and send audio</div>
+              <button className={`role-card glass ${selectedRole === 'host' ? 'selected' : ''}`} onClick={() => handleSelectRole('host')}>
+                <div className="role-top">
+                  <span className="role-chip">Host</span>
+                  <span className="role-emoji" aria-hidden>🎙️</span>
                 </div>
+                <div className="role-body">
+                  <div className="role-title">Capture and send audio</div>
+                  <div className="role-text">Share a browser tab and stream it to everyone.</div>
+                </div>
+                <div className="role-foot">Best for: laptop or desktop running the show.</div>
               </button>
-              <button className={`role-card ${selectedRole === 'speaker' ? 'selected' : ''}`} onClick={() => handleSelectRole('speaker')}>
-                <div className="role-icon">🔊</div>
-                <div>
-                  <div className="role-title">Speaker</div>
-                  <div className="role-text">Receive and play audio</div>
+              <button className={`role-card glass ${selectedRole === 'speaker' ? 'selected' : ''}`} onClick={() => handleSelectRole('speaker')}>
+                <div className="role-top">
+                  <span className="role-chip alt">Speaker</span>
+                  <span className="role-emoji" aria-hidden>🔊</span>
                 </div>
+                <div className="role-body">
+                  <div className="role-title">Receive and play audio</div>
+                  <div className="role-text">Syncs playback with the host—just pick a device and listen.</div>
+                </div>
+                <div className="role-foot">Best for: phones, tablets, smart displays.</div>
               </button>
             </div>
           </div>
@@ -561,33 +569,38 @@ function App() {
       
       {/* Host View */}
       {view === 'host' && (
-        <>
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <span style={{ fontSize: '2rem' }}>{getAnimalEmoji(myDisplayName)}</span>
-            <div>
-              <strong>{myDisplayName}</strong>
-              <span className="device-role host ml-2">HOST</span>
+        <div className="dashboard-grid">
+          <div className="card compact host-card">
+            <div className="host-meta">
+              <span style={{ fontSize: '2rem' }}>{getAnimalEmoji(myDisplayName)}</span>
+              <div>
+                <div className="label">Host</div>
+                <div className="title-sm">{myDisplayName}</div>
+              </div>
             </div>
-            <StatusBadge status={badgeStatus} latencyMs={latencyMs} lastPacketAgeMs={lastPacketAgeMs} />
-            {status === 'disconnected' && (
-              <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
-                🔄 Reconnect
-              </button>
-            )}
+            <div className="host-status">
+              <StatusBadge status={badgeStatus} latencyMs={latencyMs} lastPacketAgeMs={lastPacketAgeMs} />
+              {status === 'disconnected' && (
+                <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
+                  🔄 Reconnect
+                </button>
+              )}
+            </div>
           </div>
-          
+
+          <div className="card compact action-card">
+            <div className="action-row">
+              <button className="btn btn-secondary" onClick={handleRefreshAudioLinks}>
+                🔁 Refresh audio links
+              </button>
+              <button className="btn btn-danger" onClick={handleLeaveRoom}>
+                End Session
+              </button>
+            </div>
+          </div>
+
           <RoomInfo roomCode={roomCode} />
 
-          {preflightChips.length > 0 && (
-            <div className="chip-row mb-3">
-              {preflightChips.map((chip, idx) => (
-                <span key={idx} className={`chip ${chip.tone}`}>{chip.label}</span>
-              ))}
-            </div>
-          )}
-          
-          <AudioCapture onStreamReady={handleStreamReady} />
-          
           <DeviceList
             clients={clients}
             pendingInvites={pendingInvites}
@@ -597,14 +610,21 @@ function App() {
             onCancelInvite={cancelInvite}
           />
 
-          <button className="btn btn-secondary mt-3" onClick={handleRefreshAudioLinks}>
-            🔁 Refresh audio links
-          </button>
-          
-          <button className="btn btn-danger mt-4" onClick={handleLeaveRoom}>
-            End Session
-          </button>
-        </>
+          {preflightChips.length > 0 && (
+            <div className="card compact full-span">
+              <div className="label mb-2">Preflight</div>
+              <div className="chip-row dense">
+                {preflightChips.map((chip, idx) => (
+                  <span key={idx} className={`chip ${chip.tone}`}>{chip.label}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="full-span">
+            <AudioCapture onStreamReady={handleStreamReady} />
+          </div>
+        </div>
       )}
       
       {/* Idle View (joined but not yet a speaker) */}

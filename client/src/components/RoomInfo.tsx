@@ -52,24 +52,25 @@ export function RoomInfo({ roomCode, showQR = true }: RoomInfoProps) {
   };
 
   return (
-    <div className="room-info">
-      <div>
-        <p className="text-muted text-center">Room Code</p>
+    <div className="card room-info match-card">
+      <div className="room-code-block">
+        <p className="text-muted">Room Code</p>
         <div className="room-code" onClick={copyCode} style={{ cursor: 'pointer' }}>
           {roomCode}
         </div>
-        {copied && <p className="text-center" style={{ color: 'var(--success)', fontSize: '0.875rem' }}>Copied!</p>}
+        {copied && <p style={{ color: 'var(--success)', fontSize: '0.875rem' }}>Copied!</p>}
       </div>
       
       {showQR && (
-        <div className="qr-code">
-          <canvas ref={qrRef} />
+        <div className="qr-column">
+          <div className="qr-code">
+            <canvas ref={qrRef} />
+          </div>
+          <button className="btn btn-secondary" onClick={shareRoom}>
+            📤 Share Room
+          </button>
         </div>
       )}
-      
-      <button className="btn btn-secondary" onClick={shareRoom}>
-        📤 Share Room
-      </button>
     </div>
   );
 }

@@ -23,7 +23,7 @@ export function DeviceList({
   
   if (otherClients.length === 0) {
     return (
-      <div className="card">
+      <div className="card device-card match-card">
         <h3>Connected Devices</h3>
         <div className="empty-state">
           <div className="empty-state-icon">📱</div>
@@ -41,7 +41,7 @@ export function DeviceList({
     pendingInvites.find(inv => inv.toClientId === clientId);
 
   return (
-    <div className="card">
+    <div className="card device-card match-card">
       <h3>Connected Devices ({otherClients.length})</h3>
       <div className="device-list">
         {otherClients.map((client) => {

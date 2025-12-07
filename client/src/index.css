@@ -39,10 +39,37 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  max-width: 960px;
+  max-width: 1140px;
   margin: 0 auto;
   padding: 20px;
   width: 100%;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+  grid-auto-flow: dense;
+  align-items: stretch;
+}
+
+.dashboard-grid > .card,
+.dashboard-grid > .room-info {
+  margin-bottom: 0;
+}
+
+.match-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-stack > * + * {
+  margin-top: 12px;
+}
+
+.full-span {
+  grid-column: 1 / -1;
 }
 
 .grid {
@@ -84,6 +111,41 @@ body {
   padding: 24px;
   margin-bottom: 16px;
   border: 1px solid var(--border);
+}
+
+.card.compact {
+  padding: 16px;
+  margin-bottom: 0;
+}
+
+.host-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.host-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.host-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-card .action-row {
+  display: flex;
+  gap: 12px;
+}
+
+.action-card .btn {
+  width: auto;
+  flex: 1;
 }
 
 .card h2 {
@@ -262,6 +324,16 @@ body {
   gap: 12px;
 }
 
+.device-card h3 {
+  margin-bottom: 12px;
+}
+
+.device-card .device-list {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .device-item {
   display: flex;
   align-items: center;
@@ -316,27 +388,45 @@ body {
 
 /* Room Info */
 .room-info {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  padding: 24px;
-  background: var(--bg-dark);
-  border-radius: 12px;
-  margin-bottom: 16px;
+  gap: 24px;
+  padding: 16px;
+  background: var(--bg-card);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  height: 100%;
 }
 
 .room-code {
   font-size: 2rem;
   font-weight: 700;
-  letter-spacing: 0.5em;
+  letter-spacing: 0.3em;
   color: var(--primary-light);
 }
 
+.room-info .btn {
+  width: 100%;
+}
+
 .qr-code {
-  padding: 16px;
+  padding: 12px;
   background: white;
   border-radius: 12px;
+}
+
+.room-code-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qr-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
 .qr-code canvas,
@@ -412,46 +502,85 @@ body {
 
 .role-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
 }
 
 .role-card {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
   border: 1px solid var(--border);
-  background: var(--bg-dark);
-  border-radius: 12px;
-  padding: 12px;
+  background: linear-gradient(
+    145deg,
+    rgba(99, 102, 241, 0.08),
+    rgba(30, 41, 59, 0.95)
+  );
+  border-radius: 14px;
+  padding: 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   width: 100%;
+  position: relative;
+  overflow: hidden;
 }
 
 .role-card:hover {
   border-color: var(--primary-light);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
   transform: translateY(-2px);
 }
 
 .role-card.selected {
   border-color: var(--primary);
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+}
+.role-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.role-icon {
-  font-size: 1.5rem;
+.role-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+.role-chip.alt {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.role-emoji {
+  font-size: 1.6rem;
+}
+
+.role-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .role-title {
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text-primary);
+  font-size: 1.05rem;
 }
 
 .role-text {
-  color: var(--text-primary);
-  opacity: 0.85;
+  color: var(--text-secondary);
   font-size: 0.95rem;
+}
+
+.role-foot {
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 .toast-container {
@@ -488,6 +617,11 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+}
+
+.chip-row.dense {
+  gap: 6px;
 }
 
 .chip {
@@ -670,6 +804,18 @@ body {
   text-align: center;
 }
 
+.label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.title-sm {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
 .text-muted {
   color: var(--text-muted);
 }
@@ -823,5 +969,17 @@ body {
   }
   50% {
     transform: scaleY(1);
+  }
+}
+
+@media (max-width: 720px) {
+  .room-info {
+    grid-template-columns: 1fr;
+    text-align: center;
+    justify-items: center;
+  }
+
+  .room-info .btn {
+    width: 100%;
   }
 }
