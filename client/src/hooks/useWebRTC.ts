@@ -45,6 +45,33 @@ const buildIceServers = (): RTCConfiguration => {
 
 const ICE_SERVERS = buildIceServers();
 
+const applySenderParams = async (pc: RTCPeerConnection) => {
+  const senders = pc.getSenders();
+  await Promise.all(
+    senders.map(async (sender) => {
+      const params = sender.getParameters();
+      params.degradationPreference = "maintain-framerate";
+
+      if (!params.encodings || params.encodings.length === 0) {
+        params.encodings = [{}];
+      }
+
+      params.encodings = params.encodings.map((enc) => ({
+        ...enc,
+        maxBitrate: 64_000,
+        priority: "high",
+        degradationPreference: "maintain-framerate",
+      }));
+
+      try {
+        await sender.setParameters(params);
+      } catch (err) {
+        console.warn("Failed to apply sender params", err);
+      }
+    })
+  );
+};
+
 export function useWebRTC({
   onRemoteStream,
   onConnectionStateChange,
@@ -127,6 +154,7 @@ export function useWebRTC({
             pc.addTrack(track, localStreamRef.current);
           }
         });
+        await applySenderParams(pc);
       }
 
       try {

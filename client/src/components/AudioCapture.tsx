@@ -21,10 +21,12 @@ export function AudioCapture({ onStreamReady }: AudioCaptureProps) {
       const mediaStream = await navigator.mediaDevices.getDisplayMedia({
         video: true, // Required, but we'll ignore it
         audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
+          sampleRate: 48000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
           autoGainControl: false,
-        }
+        },
       });
 
       // Check if audio track exists

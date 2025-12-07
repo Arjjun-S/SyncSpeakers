@@ -15,9 +15,9 @@ A simple, reliable checklist for reducing lag, staying alive during sleep, and w
 
 ## Audio Quality & Lag
 
-- [ ] Step 3: Host capture tuning
-  - [ ] Use Opus constraints: `sampleRate 48000`, `channelCount 1`, `echoCancellation true`, `noiseSuppression true`, `autoGainControl false`.
-  - [ ] Set sender `maxBitrate ~64kbps`, `priority high`, `degradationPreference maintain-framerate`.
+- [x] Step 3: Host capture tuning
+  - [x] Use Opus constraints: `sampleRate 48000`, `channelCount 1`, `echoCancellation true`, `noiseSuppression true`, `autoGainControl false`.
+  - [x] Set sender `maxBitrate ~64kbps`, `priority high`, `degradationPreference maintain-framerate`.
 - [ ] Step 4: Speaker playback smoothing
   - [ ] Play remote audio through Web Audio with a small jitter buffer (80–150 ms).
   - [ ] Add fast catch-up when buffer grows; expose a safe default.
