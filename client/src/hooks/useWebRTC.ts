@@ -112,6 +112,43 @@ export function useWebRTC({
     Map<string, RTCPeerConnectionState>
   >(new Map());
 
+  const attachLocalTracks = useCallback(async (pc: RTCPeerConnection) => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+
+    const tracks = stream.getTracks();
+    const senders = pc.getSenders();
+
+    tracks.forEach((track) => {
+      const existingSender = senders.find(
+        (sender) => sender.track?.id === track.id
+      );
+
+      if (existingSender) return; // Track already bound to this pc
+
+      const reusableSender = senders.find(
+        (sender) => sender.track && sender.track.kind === track.kind
+      );
+
+      if (reusableSender) {
+        reusableSender.replaceTrack(track).catch((err) => {
+          console.warn("Failed to replace track", err);
+        });
+      } else {
+        pc.addTrack(track, stream);
+      }
+    });
+
+    // Remove senders whose tracks have ended or disappeared
+    senders
+      .filter((sender) => sender.track && !tracks.includes(sender.track))
+      .forEach((sender) => {
+        sender.replaceTrack(null).catch(() => undefined);
+      });
+
+    await applySenderParams(pc);
+  }, []);
+
   // Create a new peer connection for a specific client
   const createPeerConnection = useCallback(
     (
@@ -181,12 +218,20 @@ export function useWebRTC({
   );
 
   // Set local audio stream (for Host)
-  const setLocalStream = useCallback((stream: MediaStream) => {
-    const audioTracks = stream.getAudioTracks().length;
-    const videoTracks = stream.getVideoTracks().length;
-    log("setLocalStream", { audioTracks, videoTracks });
-    localStreamRef.current = stream;
-  }, []);
+  const setLocalStream = useCallback(
+    (stream: MediaStream) => {
+      const audioTracks = stream.getAudioTracks().length;
+      const videoTracks = stream.getVideoTracks().length;
+      log("setLocalStream", { audioTracks, videoTracks });
+      localStreamRef.current = stream;
+
+      // Ensure any already-established peers get the fresh track
+      peerConnectionsRef.current.forEach((pc) => {
+        void attachLocalTracks(pc);
+      });
+    },
+    [attachLocalTracks]
+  );
 
   // Create and send offer (Host initiates)
   const createOffer = useCallback(
@@ -198,24 +243,13 @@ export function useWebRTC({
     ) => {
       const pc = createPeerConnection(peerId, sendSignal);
 
-      // Add local tracks if available
-      if (localStreamRef.current) {
-        const tracks = localStreamRef.current.getTracks();
-        log(`pc:${peerId} attaching local tracks`, {
-          count: tracks.length,
-          kinds: tracks.map((t) => t.kind),
-        });
-
-        tracks.forEach((track) => {
-          if (localStreamRef.current) {
-            pc.addTrack(track, localStreamRef.current);
-          }
-        });
-        await applySenderParams(pc);
-      }
+      await attachLocalTracks(pc);
 
       try {
-        const offer = await pc.createOffer();
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: false,
+        });
         await pc.setLocalDescription(offer);
         log(`pc:${peerId} created offer`);
         sendSignal(offer);
@@ -223,7 +257,7 @@ export function useWebRTC({
         console.error("[webrtc] Error creating offer", error);
       }
     },
-    [createPeerConnection]
+    [createPeerConnection, attachLocalTracks]
   );
 
   // Handle incoming signal (SDP offer/answer or ICE candidate)
