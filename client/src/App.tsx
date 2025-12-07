@@ -115,7 +115,8 @@ function App() {
     createOffer, 
     handleSignal, 
     closeAllConnections,
-    renegotiate
+    renegotiate,
+    connectionStates,
   } = useWebRTC({
     onRemoteStream: (stream) => {
       console.log('Received remote stream');
@@ -503,7 +504,12 @@ function App() {
   
   // Find host display name for speaker view
   const hostInfo = clients.find(c => c.role === 'host');
+  const hostPeerId = hostClientIdRef.current || hostInfo?.clientId;
+  const hostPeerState = hostPeerId ? connectionStates.get(hostPeerId) : undefined;
+  const rtcConnectedToHost = hostPeerState === 'connected';
+
   const speakerLinkConnected =
+    rtcConnectedToHost ||
     isRTCConnected ||
     (view === 'speaker' && (badgeStatus === 'connected' || badgeStatus === 'unstable'));
   
