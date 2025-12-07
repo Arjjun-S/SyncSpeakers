@@ -1,4 +1,3 @@
-import React from 'react';
 import { AnimalSelector } from './AnimalSelector';
 import type { Animal } from '../types';
 
