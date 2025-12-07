@@ -125,6 +125,7 @@ function App() {
   // Signaling hook
   const {
     status,
+    latencyMs,
     clients,
     myDisplayName,
     myRole,
@@ -293,7 +294,7 @@ function App() {
               <strong>{myDisplayName}</strong>
               <span className="device-role host ml-2">HOST</span>
             </div>
-            <StatusBadge status={status} />
+            <StatusBadge status={status} latencyMs={latencyMs} />
             {status === 'disconnected' && (
               <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
                 🔄 Reconnect
@@ -329,7 +330,7 @@ function App() {
               <strong>{myDisplayName}</strong>
               <span className="device-role idle ml-2">WAITING</span>
             </div>
-            <StatusBadge status={status} />
+            <StatusBadge status={status} latencyMs={latencyMs} />
             {status === 'disconnected' && (
               <button className="btn btn-secondary btn-sm" onClick={manualReconnect}>
                 🔄 Reconnect
@@ -387,6 +388,7 @@ function App() {
           isConnected={isRTCConnected}
           onLeave={handleLeaveRoom}
           wsStatus={status}
+          latencyMs={latencyMs}
           onReconnect={manualReconnect}
         />
       )}

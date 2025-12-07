@@ -9,6 +9,7 @@ interface SpeakerViewProps {
   isConnected: boolean;
   onLeave: () => void;
   wsStatus?: ConnectionStatus;
+  latencyMs?: number | null;
   onReconnect?: () => void;
 }
 
@@ -19,6 +20,7 @@ export function SpeakerView({
   isConnected,
   onLeave,
   wsStatus = 'connected',
+  latencyMs,
   onReconnect
 }: SpeakerViewProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -62,7 +64,7 @@ export function SpeakerView({
         <h2>{displayName}</h2>
         
         <div className="flex items-center gap-2 mb-4">
-          <StatusBadge status={wsStatus} />
+          <StatusBadge status={wsStatus} latencyMs={latencyMs} />
           {wsStatus === 'disconnected' && onReconnect && (
             <button className="btn btn-secondary btn-sm" onClick={onReconnect}>
               🔄 Reconnect
