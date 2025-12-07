@@ -9,6 +9,7 @@
  * - WebRTC signaling (SDP/ICE relay)
  */
 
+const http = require("http");
 const WebSocket = require("ws");
 const { v4: uuidv4 } = require("uuid");
 
@@ -45,17 +46,53 @@ const ANIMALS = [
 ];
 
 const INVITE_TIMEOUT_MS = 20000;
+const RATE_LIMIT_WINDOW_MS = 10000;
+const RATE_LIMIT_MAX_MESSAGES = 60; // generous but bounded
+// Accept 4-12 uppercase letters/digits to align with tests and client generator
+const ROOM_ID_REGEX = /^[A-Z0-9]{4,12}$/;
 
 function createSignalingServer(options = {}) {
   const portOption = options.port ?? process.env.PORT ?? 8080;
   const rooms = new Map();
   const invites = new Map();
+  const rateLimits = new WeakMap();
 
-  const wss = new WebSocket.Server({ port: portOption });
+  const server = http.createServer((req, res) => {
+    if (req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
 
-  console.log(
-    `🔊 SyncSpeakers Signaling Server running on port ${wss.address().port}`
-  );
+  const wss = new WebSocket.Server({ server });
+
+  server.listen(portOption, () => {
+    console.log(
+      `🔊 SyncSpeakers Signaling Server running on port ${
+        server.address().port
+      }`
+    );
+  });
+
+  const pruneInterval = setInterval(() => {
+    // Clean up expired invites
+    const now = Date.now();
+    invites.forEach((inv, id) => {
+      if (inv.expires && inv.expires < now) {
+        invites.delete(id);
+      }
+    });
+
+    // Remove empty rooms defensively (should be cleared on disconnect already)
+    rooms.forEach((roomClients, roomId) => {
+      if (!roomClients || roomClients.size === 0) {
+        rooms.delete(roomId);
+      }
+    });
+  }, 60_000);
 
   function getRoomClients(roomId) {
     const room = rooms.get(roomId);
@@ -65,6 +102,10 @@ function createSignalingServer(options = {}) {
       displayName: client.displayName,
       role: client.role,
     }));
+  }
+
+  function isValidRoomId(roomId) {
+    return typeof roomId === "string" && ROOM_ID_REGEX.test(roomId);
   }
 
   function broadcastToRoom(roomId, message, excludeClientId = null) {
@@ -144,12 +185,43 @@ function createSignalingServer(options = {}) {
     }, INVITE_TIMEOUT_MS);
   }
 
+  function checkRateLimit(ws) {
+    const now = Date.now();
+    let bucket = rateLimits.get(ws);
+
+    if (!bucket) {
+      bucket = { count: 0, windowStart: now };
+      rateLimits.set(ws, bucket);
+    }
+
+    if (now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
+      bucket.windowStart = now;
+      bucket.count = 0;
+    }
+
+    bucket.count += 1;
+    if (bucket.count > RATE_LIMIT_MAX_MESSAGES) {
+      return false;
+    }
+    return true;
+  }
+
   wss.on("connection", (ws) => {
     console.log("🔌 New connection");
 
     ws.clientInfo = null;
 
     ws.on("message", (data) => {
+      if (!checkRateLimit(ws)) {
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "Rate limit exceeded. Please slow down.",
+          })
+        );
+        return;
+      }
+
       let message;
       try {
         message = JSON.parse(data.toString());
@@ -184,6 +256,16 @@ function createSignalingServer(options = {}) {
               JSON.stringify({
                 type: "error",
                 message: "roomId and clientId required",
+              })
+            );
+            return;
+          }
+
+          if (!isValidRoomId(roomId)) {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                message: "Invalid roomId format",
               })
             );
             return;
@@ -261,6 +343,16 @@ function createSignalingServer(options = {}) {
               JSON.stringify({
                 type: "error",
                 message: "roomId, from, and to required",
+              })
+            );
+            return;
+          }
+
+          if (!isValidRoomId(roomId)) {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                message: "Invalid roomId format",
               })
             );
             return;
@@ -356,6 +448,16 @@ function createSignalingServer(options = {}) {
             return;
           }
 
+          if (!isValidRoomId(roomId)) {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                message: "Invalid roomId format",
+              })
+            );
+            return;
+          }
+
           const room = rooms.get(roomId);
           if (!room) {
             ws.send(
@@ -431,6 +533,16 @@ function createSignalingServer(options = {}) {
             return;
           }
 
+          if (!isValidRoomId(roomId)) {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                message: "Invalid roomId format",
+              })
+            );
+            return;
+          }
+
           const sent = sendToClient(roomId, to, {
             type: "signal",
             from,
@@ -460,6 +572,16 @@ function createSignalingServer(options = {}) {
             return;
           }
 
+          if (!isValidRoomId(roomId)) {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                message: "Invalid roomId format",
+              })
+            );
+            return;
+          }
+
           broadcastToRoom(
             roomId,
             {
@@ -475,6 +597,8 @@ function createSignalingServer(options = {}) {
 
         case "leave": {
           if (!roomId || !from) return;
+
+          if (!isValidRoomId(roomId)) return;
 
           const room = rooms.get(roomId);
           if (!room) return;
@@ -532,6 +656,7 @@ function createSignalingServer(options = {}) {
 
   const close = () =>
     new Promise((resolve) => {
+      clearInterval(pruneInterval);
       // Terminate any active clients so the server can close promptly (used in tests)
       wss.clients.forEach((client) => {
         try {
@@ -541,10 +666,12 @@ function createSignalingServer(options = {}) {
         }
       });
 
-      wss.close(() => resolve());
+      wss.close(() => {
+        server.close(() => resolve());
+      });
     });
 
-  return { wss, port: wss.address().port, close };
+  return { wss, port: server.address().port, close };
 }
 
 if (require.main === module) {

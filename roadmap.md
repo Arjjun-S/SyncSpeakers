@@ -45,7 +45,7 @@ A simple, reliable checklist for reducing lag, staying alive during sleep, and w
 
 ## Server Hardening
 
-- [ ] Step 9: Signaling server safeguards
-  - [ ] Rate limit messages per client; validate roomId format; guard duplicate hosts.
-  - [ ] Add health endpoint and room cleanup timers.
+- [x] Step 9: Signaling server safeguards
+  - [x] Rate limit messages per client; validate roomId format; guard duplicate hosts.
+  - [x] Add health endpoint and room cleanup timers.
   - [ ] (Optional) Redis presence if scaling horizontally.
