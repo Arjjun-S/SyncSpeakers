@@ -55,7 +55,13 @@ export function SpeakerView({
 
   return (
     <div className="card">
-      <audio ref={audioRef} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
+      <audio
+        ref={audioRef}
+        autoPlay
+        playsInline
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+      />
       
       <div className="speaker-status">
         <div className="emoji">{getAnimalEmoji(displayName)}</div>

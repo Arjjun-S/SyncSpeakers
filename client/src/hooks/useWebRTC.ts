@@ -102,6 +102,12 @@ export function useWebRTC({
       // Handle remote stream
       pc.ontrack = (event) => {
         console.log(`Received remote track from ${peerId}`);
+
+        // Nudge WebRTC toward low-latency playout when supported
+        if ((event as any).receiver?.playoutDelayHint !== undefined) {
+          (event as any).receiver.playoutDelayHint = 0.02; // target ~20ms playout buffer
+        }
+
         if (event.streams[0]) {
           onRemoteStream?.(event.streams[0]);
         }
@@ -130,6 +136,8 @@ export function useWebRTC({
       // Add local tracks if available
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => {
+          // Hint to browsers that this is speech to prefer lower latency
+          track.contentHint = track.contentHint || "speech";
           if (localStreamRef.current) {
             pc.addTrack(track, localStreamRef.current);
           }
