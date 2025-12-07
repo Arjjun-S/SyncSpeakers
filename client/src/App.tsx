@@ -453,6 +453,8 @@ function App() {
     setView('welcome');
     setRemoteStream(null);
     setIsRTCConnected(false);
+    setPendingInviteFrom(null);
+    setSelectedRole(null);
     hostClientIdRef.current = null;
     localStreamRef.current = null;
     localStorage.removeItem(SESSION_KEY);
@@ -501,7 +503,9 @@ function App() {
   
   // Find host display name for speaker view
   const hostInfo = clients.find(c => c.role === 'host');
-  const speakerLinkConnected = isRTCConnected || (view === 'speaker' && status === 'connected');
+  const speakerLinkConnected =
+    isRTCConnected ||
+    (view === 'speaker' && (badgeStatus === 'connected' || badgeStatus === 'unstable'));
   
   return (
     <div className="app">

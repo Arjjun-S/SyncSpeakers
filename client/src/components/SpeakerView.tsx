@@ -87,9 +87,8 @@ export function SpeakerView({
   }, [ensureContext, targetDelayMs, maxDelayMs, volume, tearDown]);
 
   useEffect(() => {
-    if (remoteStream) {
-      setupPipeline(remoteStream).catch((err: unknown) => console.error('Audio pipeline error', err));
-    } else {
+    // Do not auto-start playback to satisfy browser autoplay policies.
+    if (!remoteStream) {
       tearDown();
       setIsPlaying(false);
     }
