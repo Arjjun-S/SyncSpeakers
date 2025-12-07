@@ -120,6 +120,11 @@ body {
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
+.card-compact {
+  padding: 14px 16px;
+  border-radius: 14px;
+}
+
 .card > * {
   position: relative;
   z-index: 1;
@@ -487,6 +492,42 @@ body {
   gap: 12px;
 }
 
+.device-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-section {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.room-card h3 {
+  margin-bottom: 8px;
+}
+
+@media (max-width: 900px) {
+  .device-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+.device-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.device-room {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .device-item {
   display: flex;
   align-items: center;
@@ -537,6 +578,10 @@ body {
 .device-role.pending {
   background: var(--warning);
   color: black;
+}
+
+.empty-state.compact {
+  padding: 14px;
 }
 
 .tag-list {
@@ -611,6 +656,14 @@ body {
   margin-bottom: 16px;
 }
 
+.room-info.compact {
+  padding: 10px 12px;
+  gap: 10px;
+  margin: 0;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+}
+
 .room-code {
   font-size: 2rem;
   font-weight: 700;
@@ -618,10 +671,19 @@ body {
   color: var(--primary-light);
 }
 
+.room-code-compact {
+  font-size: 1.35rem;
+  letter-spacing: 0.32em;
+}
+
 .qr-code {
   padding: 16px;
   background: white;
   border-radius: 12px;
+}
+
+.qr-code-compact {
+  padding: 8px;
 }
 
 .broadcast-card {
@@ -638,6 +700,10 @@ body {
 .qr-code canvas,
 .qr-code img {
   display: block;
+}
+.qr-code-compact canvas {
+  width: 120px !important;
+  height: 120px !important;
 }
 
 /* Modal */

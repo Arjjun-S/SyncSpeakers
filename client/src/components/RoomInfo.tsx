@@ -4,9 +4,12 @@ import QRCode from 'qrcode';
 interface RoomInfoProps {
   roomCode: string;
   showQR?: boolean;
+  showShare?: boolean;
+  qrSize?: number;
+  compact?: boolean;
 }
 
-export function RoomInfo({ roomCode, showQR = true }: RoomInfoProps) {
+export function RoomInfo({ roomCode, showQR = true, showShare = true, qrSize = 180, compact = false }: RoomInfoProps) {
   const qrRef = useRef<HTMLCanvasElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -14,15 +17,15 @@ export function RoomInfo({ roomCode, showQR = true }: RoomInfoProps) {
     if (showQR && qrRef.current) {
       const joinUrl = `${window.location.origin}?room=${roomCode}`;
       QRCode.toCanvas(qrRef.current, joinUrl, {
-        width: 180,
-        margin: 2,
+        width: qrSize,
+        margin: qrSize > 140 ? 2 : 1,
         color: {
           dark: '#1e293b',
           light: '#ffffff'
         }
       });
     }
-  }, [roomCode, showQR]);
+  }, [roomCode, showQR, qrSize]);
 
   const copyCode = async () => {
     try {
@@ -52,24 +55,26 @@ export function RoomInfo({ roomCode, showQR = true }: RoomInfoProps) {
   };
 
   return (
-    <div className="room-info">
+    <div className={`room-info${compact ? ' compact' : ''}`}>
       <div>
         <p className="text-muted text-center">Room Code</p>
-        <div className="room-code" onClick={copyCode} style={{ cursor: 'pointer' }}>
+        <div className={`room-code${compact ? ' room-code-compact' : ''}`} onClick={copyCode} style={{ cursor: 'pointer' }}>
           {roomCode}
         </div>
         {copied && <p className="text-center" style={{ color: 'var(--success)', fontSize: '0.875rem' }}>Copied!</p>}
       </div>
       
       {showQR && (
-        <div className="qr-code">
+        <div className={`qr-code${compact ? ' qr-code-compact' : ''}`}>
           <canvas ref={qrRef} />
         </div>
       )}
-      
-      <button className="btn btn-secondary" onClick={shareRoom}>
-        📤 Share Room
-      </button>
+
+      {showShare && (
+        <button className="btn btn-secondary" onClick={shareRoom}>
+          📤 Share Room
+        </button>
+      )}
     </div>
   );
 }

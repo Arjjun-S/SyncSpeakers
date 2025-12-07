@@ -7,6 +7,7 @@ import { StatusBadge } from './components/StatusBadge';
 import { RoleSelector } from './components/RoleSelector';
 import { ProfileForm } from './components/ProfileForm';
 import { SessionPanel } from './components/SessionPanel';
+import { RoomInfo } from './components/RoomInfo';
 import { 
   useSignaling, 
   generateRoomCode, 
@@ -58,6 +59,7 @@ function App() {
   const [view, setView] = useState<AppView>('welcome');
   const [roomCode, setRoomCode] = useState('');
   const [joinRoomCode, setJoinRoomCode] = useState('');
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   
   // Invite modal state
   const [pendingInviteFrom, setPendingInviteFrom] = useState<{ id: string; displayName: string } | null>(null);
@@ -67,6 +69,8 @@ function App() {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const hostClientIdRef = useRef<string | null>(null);
   const [isRTCConnected, setIsRTCConnected] = useState(false);
+  const prevSignalStatusRef = useRef<'disconnected' | 'connecting' | 'connected'>('disconnected');
+  const inviteNoticeTimeoutRef = useRef<number | null>(null);
   
   // Check URL for room code
   useEffect(() => {
@@ -120,6 +124,11 @@ function App() {
     console.log('Invite expired:', inviteId);
     // Clear modal if it was for this invite
     setPendingInviteFrom(null);
+    setInviteNotice('Invite expired. Waiting for a new invite...');
+    if (inviteNoticeTimeoutRef.current) {
+      clearTimeout(inviteNoticeTimeoutRef.current);
+    }
+    inviteNoticeTimeoutRef.current = window.setTimeout(() => setInviteNotice(null), 4000);
   }, []);
   
   const handleInviteCancelled = useCallback(() => {
@@ -176,6 +185,26 @@ function App() {
   // Store sendSignal ref for WebRTC callbacks
   const sendSignalRef = useRef(sendSignal);
   sendSignalRef.current = sendSignal;
+
+  // When signaling reconnects, proactively renegotiate with all speakers
+  useEffect(() => {
+    const wasDisconnected = prevSignalStatusRef.current === 'disconnected';
+    const isReconnected = wasDisconnected && status === 'connected';
+
+    if (isReconnected && view === 'host' && localStreamRef.current) {
+      const speakers = clients.filter(c => c.role === 'speaker' && c.clientId !== clientId);
+      if (speakers.length) {
+        console.log('🔄 Signaling reconnected, refreshing offers to speakers');
+        speakers.forEach(speaker => {
+          createOffer(speaker.clientId, (payload) => {
+            sendSignalRef.current?.(speaker.clientId, payload);
+          });
+        });
+      }
+    }
+
+    prevSignalStatusRef.current = status;
+  }, [status, view, clients, createOffer, clientId]);
   
   // Update view based on role
   useEffect(() => {
@@ -245,6 +274,11 @@ function App() {
     setIsRTCConnected(false);
     hostClientIdRef.current = null;
     localStreamRef.current = null;
+    setInviteNotice(null);
+    if (inviteNoticeTimeoutRef.current) {
+      clearTimeout(inviteNoticeTimeoutRef.current);
+      inviteNoticeTimeoutRef.current = null;
+    }
     
     // Clear URL params
     window.history.replaceState({}, '', window.location.pathname);
@@ -338,6 +372,21 @@ function App() {
         </div>
       </header>
 
+      {inviteNotice && (
+        <div
+          style={{
+            background: 'var(--card-bg, #f8f9fb)',
+            border: '1px solid var(--border, #e5e7eb)',
+            color: 'var(--text, #111827)',
+            padding: '12px 14px',
+            borderRadius: '12px',
+            marginBottom: '12px'
+          }}
+        >
+          ℹ️ {inviteNotice}
+        </div>
+      )}
+
       {view === 'welcome' && renderWizard()}
 
       {view !== 'welcome' && (
@@ -381,14 +430,21 @@ function App() {
                 <AudioCapture onStreamReady={handleStreamReady} />
               </div>
 
-              <DeviceList
-                clients={clients}
-                pendingInvites={pendingInvites}
-                myClientId={clientId}
-                isHost={true}
-                onInvite={invite}
-                onCancelInvite={cancelInvite}
-              />
+              <div className="device-section">
+                <DeviceList
+                  clients={clients}
+                  pendingInvites={pendingInvites}
+                  myClientId={clientId}
+                  isHost={true}
+                  onInvite={invite}
+                  onCancelInvite={cancelInvite}
+                />
+
+                <div className="card card-compact room-card">
+                  <h3>Room Code</h3>
+                  <RoomInfo roomCode={roomCode} showShare={false} qrSize={140} compact />
+                </div>
+              </div>
 
               <button className="btn btn-danger" onClick={handleLeaveRoom}>
                 End session

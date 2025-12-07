@@ -21,7 +21,10 @@ export function AudioCapture({ onStreamReady }: AudioCaptureProps) {
       const mediaStream = await navigator.mediaDevices.getDisplayMedia({
         video: true, // Required, but we'll ignore it
         audio: {
-          echoCancellation: false,
+          channelCount: 2,
+          sampleRate: 48000,
+          sampleSize: 16,
+          echoCancellation: true,
           noiseSuppression: false,
           autoGainControl: false,
         }
