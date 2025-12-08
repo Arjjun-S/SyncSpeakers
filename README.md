@@ -99,4 +99,4 @@ Render users can deploy both services automatically:
 
 ## License
 
-This project is distributed under the [MIT License](LICENSE).
+This project is distributed under the [CC BY-NC 4.0](LICENSE).
