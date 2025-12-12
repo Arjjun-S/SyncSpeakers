@@ -99,4 +99,4 @@ Render users can deploy both services automatically:
 
 ## License
 
-This project is distributed under the [CC BY-NC 4.0](LICENSE).
+This project is distributed under the https://github.com/Arjjun-S/SyncSpeakers/blob/ec659572e514c7fae76486023a0cc566ef7606ea/LICENSE
