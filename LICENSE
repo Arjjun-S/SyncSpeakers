@@ -1,59 +1,21 @@
-ARJJUN ROYALTY LICENSE (ARL) – Version 1.0
-Copyright © 2025 Arjjun S & Dhanush S
-All rights reserved except where granted below.
+MIT License
 
-⸻
+Copyright (c) 2026 SyncSpeakers contributors
 
-1. Permission to Use
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Users are allowed to use the Software for personal, educational, and commercial purposes under the terms of this License.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-2. Permission to Modify
-
-Users may modify, improve, or build upon the Software.
-All modified versions must clearly state:
-“Based on the original work by Arjjun S & Dhanush S.”
-The creator’s name must always remain in all copies and modified versions.
-
-3. Permission to Contribute
-
-Users may submit contributions.
-Contributions do not transfer ownership.
-Primary copyright always belongs to Arjjun S.
-
-4. Attribution (Creator Credit)
-
-All copies, distributions, and modifications must clearly credit:
-“Created by Arjjun S & Dhanush S”
-This credit may not be removed under any circumstances.
-
-5. Commercial Use and Royalty Requirement
-
-If the Software (or any modified version) is used commercially, the user must pay 20% of all revenue, earnings, or financial benefit derived from the Software to Arjjun S & Dhanush S.
-This includes ads, subscriptions, sales, paid features, licensing, or any form of monetization.
-Royalty payments must be made quarterly unless agreed otherwise.
-
-6. Prohibition on Selling the Project Itself
-
-Users may not sell, rent, license, or distribute the Software as a standalone product claiming ownership.
-They may only commercialize their own services or applications built using the Software.
-
-7. Redistribution Requirements
-
-Redistribution (modified or unmodified) is permitted only if:
-	1.	This license text is included in full.
-	2.	The creator credit “Created by Arjjun S & Dhanush S” remains visible.
-	3.	The 20% royalty requirement is preserved.
-
-8. No Liability
-
-The Software is provided “as is” without warranty of any kind.
-The creator is not liable for damages or data loss.
-
-9. Termination
-
-If any user violates these terms, their rights under this License are automatically terminated.
-
-10. Acceptance
-
-By using, modifying, distributing, or commercializing the Software, the user agrees to all terms in this License.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

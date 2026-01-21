@@ -9,6 +9,7 @@
  * - WebRTC signaling (SDP/ICE relay)
  */
 
+const http = require('http');
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 
@@ -32,10 +33,30 @@ const ANIMALS = [
 // Invite timeout in ms
 const INVITE_TIMEOUT_MS = 20000;
 
-// Create WebSocket server
-const wss = new WebSocket.Server({ port: PORT });
+// Create HTTP server (for time sync) and attach WebSocket server
+const server = http.createServer((req, res) => {
+  // Simple time endpoint for NTP-style clock sync
+  if (req.method === 'GET' && req.url && req.url.startsWith('/time')) {
+    const now = Date.now();
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+    });
+    res.end(JSON.stringify({ serverTime: now }));
+    return;
+  }
 
-console.log(`🔊 SyncSpeakers Signaling Server running on port ${PORT}`);
+  // Fallback 404 for any other HTTP requests
+  res.statusCode = 404;
+  res.end('Not Found');
+});
+
+// WebSocket signaling server shares the same HTTP server/port
+const wss = new WebSocket.Server({ server });
+
+server.listen(PORT, () => {
+  console.log(`🔊 SyncSpeakers Signaling Server running on port ${PORT}`);
+});
 
 // Helper: Get all clients in a room as array
 function getRoomClients(roomId) {
@@ -417,18 +438,33 @@ wss.on('connection', (ws) => {
           return;
         }
         
-        // Broadcast to all speakers
+        const command = payload?.command || 'play'; // play, pause, seek
+        const effectiveTime =
+          typeof payload?.effectiveTime === 'number'
+            ? payload.effectiveTime
+            : typeof payload?.timestamp === 'number'
+            ? payload.timestamp
+            : Date.now();
+        const targetPosition =
+          typeof payload?.targetPosition === 'number'
+            ? payload.targetPosition
+            : undefined;
+
+        // Broadcast structured playback command to all speakers
         room.forEach((client) => {
           if (client.role === 'speaker') {
             sendToClient(roomId, client.clientId, {
               type: 'play-command',
-              command: payload?.command || 'play', // play, pause, stop
-              timestamp: payload?.timestamp
+              command,
+              effectiveTime,
+              targetPosition,
             });
           }
         });
         
-        console.log(`▶️ Play command: ${payload?.command}`);
+        console.log(`▶️ Play command: ${command} @ ${effectiveTime}${
+          targetPosition != null ? ` (targetPosition=${targetPosition.toFixed(3)}s)` : ''
+        }`);
         
         break;
       }
@@ -535,10 +571,14 @@ setInterval(() => {
 // Handle server shutdown gracefully
 process.on('SIGTERM', () => {
   console.log('🛑 Server shutting down...');
-  wss.clients.forEach(ws => {
+
+  wss.clients.forEach((ws) => {
     ws.close();
   });
+
   wss.close(() => {
-    process.exit(0);
+    server.close(() => {
+      process.exit(0);
+    });
   });
 });

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "SyncSpeakers PWA - Synchronized audio playback across devices",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

@@ -76,10 +76,27 @@ export interface SignalMessage {
   payload: RTCSessionDescriptionInit | RTCIceCandidateInit;
 }
 
+export type PlaybackCommandType = 'play' | 'pause' | 'seek';
+
+export interface PlaybackCommandPayload {
+  command: PlaybackCommandType;
+  /**
+   * Server-authoritative wall-clock time in ms when this
+   * command should take effect on all devices.
+   */
+  effectiveTime: number;
+  /**
+   * Optional target position in the stream/track, in seconds.
+   * Required for SEEK, used for PLAY to indicate resume position.
+   */
+  targetPosition?: number;
+}
+
 export interface PlayCommandMessage {
   type: 'play-command';
-  command: 'play' | 'pause' | 'stop';
-  timestamp?: number;
+  command: PlaybackCommandType;
+  effectiveTime: number;
+  targetPosition?: number;
 }
 
 export interface HostDisconnectedMessage {

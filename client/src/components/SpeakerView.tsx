@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { getAnimalEmoji, ConnectionStatus } from '../types';
+import { getAnimalEmoji, ConnectionStatus, PlaybackCommandPayload } from '../types';
 import { StatusBadge } from './StatusBadge';
+import { usePlaybackScheduler } from '../hooks/usePlaybackScheduler';
 
 interface SpeakerViewProps {
   displayName: string;
@@ -10,6 +11,10 @@ interface SpeakerViewProps {
   onLeave: () => void;
   wsStatus?: ConnectionStatus;
   onReconnect?: () => void;
+  /** Latest playback command from host, already parsed from signaling. */
+  playbackCommand?: PlaybackCommandPayload | null;
+  /** Function returning current estimated server time in ms. */
+  getServerTime: () => number;
 }
 
 export function SpeakerView({ 
@@ -19,7 +24,9 @@ export function SpeakerView({
   isConnected,
   onLeave,
   wsStatus = 'connected',
-  onReconnect
+  onReconnect,
+  playbackCommand,
+  getServerTime,
 }: SpeakerViewProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -28,6 +35,58 @@ export function SpeakerView({
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [ctxError, setCtxError] = useState<string | null>(null);
+
+  // Per-device output latency estimate (ms). We start from
+  // AudioContext.baseLatency / outputLatency where available, and
+  // allow future refinement via calibration.
+  const [outputLatencyMs, setOutputLatencyMs] = useState(80);
+  const [usingBluetooth, setUsingBluetooth] = useState(false);
+
+  const { applyRemoteCommand } = usePlaybackScheduler(
+    audioRef,
+    {
+      getServerTime,
+      outputLatencyMs,
+      minBufferMs: 3000,
+    }
+  );
+
+  // Load any previously calibrated latency offset from storage.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('syncspeakers_output_latency_ms');
+      if (stored) {
+        const parsed = parseFloat(stored);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          setOutputLatencyMs(parsed);
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  // Heuristic Bluetooth detection: if any audiooutput device label
+  // contains "Bluetooth", inflate the assumed output latency and
+  // surface a user-facing warning.
+  useEffect(() => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+
+    navigator.mediaDevices
+      .enumerateDevices()
+      .then((devices) => {
+        const hasBluetooth = devices.some(
+          (d) => d.kind === 'audiooutput' && /bluetooth/i.test(d.label || '')
+        );
+        if (hasBluetooth) {
+          setUsingBluetooth(true);
+          setOutputLatencyMs((prev) => Math.max(prev, 220));
+        }
+      })
+      .catch((err) => {
+        console.warn('enumerateDevices failed for Bluetooth detection:', err);
+      });
+  }, []);
 
   useEffect(() => {
     // Hook remote stream to both the media element (fallback) and a low-latency AudioContext path.
@@ -51,6 +110,34 @@ export function SpeakerView({
     try {
       if (!audioCtxRef.current) {
         audioCtxRef.current = new AudioContext({ latencyHint: 'interactive' });
+        const ctx = audioCtxRef.current;
+        const base = (ctx as any).baseLatency ?? 0;
+        const output = (ctx as any).outputLatency ?? 0;
+        const estLatencyMs = (base + output) * 1000;
+        if (estLatencyMs > 0) {
+          setOutputLatencyMs(estLatencyMs);
+          try {
+            localStorage.setItem('syncspeakers_output_latency_ms', estLatencyMs.toString());
+          } catch {
+            // Ignore storage errors
+          }
+        }
+
+        // Fire a short calibration tone once to warm up the
+        // output pipeline and anchor timing based on AudioContext.
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          gain.gain.value = 0.1;
+          osc.frequency.value = 1000;
+          osc.connect(gain).connect(ctx.destination);
+          const startAt = ctx.currentTime + 0.05;
+          const stopAt = startAt + 0.1;
+          osc.start(startAt);
+          osc.stop(stopAt);
+        } catch (toneErr) {
+          console.warn('Calibration tone failed:', toneErr);
+        }
       }
       if (sourceRef.current) {
         sourceRef.current.disconnect();
@@ -85,6 +172,13 @@ export function SpeakerView({
       }
     };
   }, [remoteStream]);
+
+  // Apply any incoming synchronized playback commands.
+  useEffect(() => {
+    if (playbackCommand) {
+      applyRemoteCommand(playbackCommand);
+    }
+  }, [playbackCommand, applyRemoteCommand]);
 
   const handlePlay = async () => {
     if (audioRef.current) {
@@ -172,6 +266,13 @@ export function SpeakerView({
                 {ctxError && (
                   <p className="text-muted mt-2" style={{ color: 'var(--warning)' }}>
                     {ctxError}
+                  </p>
+                )}
+
+                {usingBluetooth && (
+                  <p className="text-muted mt-1" style={{ color: 'var(--warning)' }}>
+                    ⚠️ Bluetooth output detected. Sync accuracy may be slightly reduced
+                    when mixing Bluetooth and non-Bluetooth devices.
                   </p>
                 )}
                 

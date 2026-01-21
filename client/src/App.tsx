@@ -17,7 +17,8 @@ import {
   storeDisplayName 
 } from './hooks/useSignaling';
 import { useWebRTC } from './hooks/useWebRTC';
-import { ANIMALS, type Animal, type InviteMessage, getAnimalEmoji } from './types';
+import { ANIMALS, type Animal, type InviteMessage, type PlaybackCommandPayload, getAnimalEmoji } from './types';
+import { useServerClock } from './hooks/useServerClock';
 
 type AppView = 'welcome' | 'host' | 'speaker' | 'idle';
 
@@ -72,6 +73,12 @@ function App() {
   const [isRTCConnected, setIsRTCConnected] = useState(false);
   const prevSignalStatusRef = useRef<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const inviteNoticeTimeoutRef = useRef<number | null>(null);
+
+  // Global synchronized clock state
+  const { getServerTime } = useServerClock();
+
+  // Latest playback command from host (for this client as speaker)
+  const [playbackCommand, setPlaybackCommand] = useState<PlaybackCommandPayload | null>(null);
   
   // Check URL for room code
   useEffect(() => {
@@ -180,7 +187,10 @@ function App() {
     onInviteCancelled: handleInviteCancelled,
     onSignal: handleSignalMessage,
     onHostDisconnected: handleHostDisconnected,
-    onError: handleError
+    onError: handleError,
+    onPlayCommand: (cmd) => {
+      setPlaybackCommand(cmd);
+    },
   });
   
   // Store sendSignal ref for WebRTC callbacks
@@ -464,6 +474,8 @@ function App() {
                 onLeave={handleLeaveRoom}
                 wsStatus={status}
                 onReconnect={manualReconnect}
+                playbackCommand={playbackCommand}
+                getServerTime={getServerTime}
               />
             )}
           </div>

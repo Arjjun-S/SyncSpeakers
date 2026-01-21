@@ -6,10 +6,11 @@ import type {
   ServerMessage,
   InviteMessage,
   PendingInvite,
+  PlaybackCommandPayload,
 } from "../types";
 
 // Get WebSocket URL - MUST be wss:// for production
-const getWsUrl = () => {
+export const getWsUrl = () => {
   // Explicit environment variable (preferred - set in Render dashboard)
   if (import.meta.env.VITE_WS_URL) {
     let url = import.meta.env.VITE_WS_URL as string;
@@ -73,10 +74,7 @@ interface UseSignalingOptions {
     from: string,
     payload: RTCSessionDescriptionInit | RTCIceCandidateInit
   ) => void;
-  onPlayCommand?: (
-    command: "play" | "pause" | "stop",
-    timestamp?: number
-  ) => void;
+  onPlayCommand?: (payload: PlaybackCommandPayload) => void;
   onHostDisconnected?: () => void;
   onError?: (message: string) => void;
 }
@@ -237,7 +235,11 @@ export function useSignaling(options: UseSignalingOptions) {
               break;
 
             case "play-command":
-              opts.onPlayCommand?.(message.command, message.timestamp);
+              opts.onPlayCommand?.({
+                command: message.command,
+                effectiveTime: message.effectiveTime,
+                targetPosition: message.targetPosition,
+              });
               break;
 
             case "host-disconnected":
@@ -390,13 +392,13 @@ export function useSignaling(options: UseSignalingOptions) {
     [send, roomId, clientId]
   );
 
-  const sendPlayCommand = useCallback(
-    (command: "play" | "pause" | "stop") => {
+  const sendPlaybackCommand = useCallback(
+    (payload: PlaybackCommandPayload) => {
       send({
         type: "play-command",
         roomId,
         from: clientId,
-        payload: { command, timestamp: Date.now() },
+        payload,
       });
     },
     [send, roomId, clientId]
@@ -464,7 +466,7 @@ export function useSignaling(options: UseSignalingOptions) {
     respondToInvite,
     cancelInvite,
     sendSignal,
-    sendPlayCommand,
+    sendPlaybackCommand,
     leave,
     manualReconnect,
   };
