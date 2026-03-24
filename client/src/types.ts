@@ -70,10 +70,15 @@ export interface InviteCancelledMessage {
   reason?: string;
 }
 
+export interface StartAudioPayload {
+  type: 'start-audio';
+  startTime: number;
+}
+
 export interface SignalMessage {
   type: 'signal';
   from: string;
-  payload: RTCSessionDescriptionInit | RTCIceCandidateInit;
+  payload: RTCSessionDescriptionInit | RTCIceCandidateInit | StartAudioPayload;
 }
 
 export type PlaybackCommandType = 'play' | 'pause' | 'seek';
@@ -114,6 +119,11 @@ export interface PongMessage {
   type: 'pong';
 }
 
+export interface TimeSyncMessage {
+  type: 'time-sync';
+  serverTime: number;
+}
+
 export type ServerMessage = 
   | RegisteredMessage 
   | ClientsUpdatedMessage 
@@ -126,7 +136,8 @@ export type ServerMessage =
   | PlayCommandMessage
   | HostDisconnectedMessage
   | ErrorMessage
-  | PongMessage;
+  | PongMessage
+  | TimeSyncMessage;
 
 // Pending invite tracking
 export interface PendingInvite {

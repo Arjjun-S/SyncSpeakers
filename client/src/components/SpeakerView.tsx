@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { getAnimalEmoji, ConnectionStatus, PlaybackCommandPayload } from '../types';
+import { getAnimalEmoji, ConnectionStatus, PlaybackCommandPayload, StartAudioPayload } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { usePlaybackScheduler } from '../hooks/usePlaybackScheduler';
 
@@ -15,6 +15,8 @@ interface SpeakerViewProps {
   playbackCommand?: PlaybackCommandPayload | null;
   /** Function returning current estimated server time in ms. */
   getServerTime: () => number;
+  startAudioCommand?: StartAudioPayload | null;
+  wsTimeOffset: number;
 }
 
 export function SpeakerView({ 
@@ -27,6 +29,8 @@ export function SpeakerView({
   onReconnect,
   playbackCommand,
   getServerTime,
+  startAudioCommand,
+  wsTimeOffset,
 }: SpeakerViewProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -35,6 +39,12 @@ export function SpeakerView({
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [ctxError, setCtxError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const isLanMode = typeof window !== 'undefined' && 
+    (window.location.hostname.includes("192.168") || 
+     window.location.hostname.includes("localhost") || 
+     window.location.hostname === "127.0.0.1");
 
   // Per-device output latency estimate (ms). We start from
   // AudioContext.baseLatency / outputLatency where available, and
@@ -90,7 +100,7 @@ export function SpeakerView({
 
   useEffect(() => {
     // Hook remote stream to both the media element (fallback) and a low-latency AudioContext path.
-    if (!remoteStream) {
+    if (!remoteStream || !startAudioCommand) {
       if (sourceRef.current) {
         sourceRef.current.disconnect();
         sourceRef.current = null;
@@ -99,69 +109,80 @@ export function SpeakerView({
       return;
     }
 
-    if (audioRef.current) {
-      audioRef.current.srcObject = remoteStream;
-      audioRef.current.volume = 0; // mute element to avoid double output when context is used
-      audioRef.current.play().catch(() => {
-        console.log('Autoplay blocked, waiting for user interaction');
-      });
+    const now = Date.now() + wsTimeOffset;
+    const delay = startAudioCommand.startTime - now;
+
+    if (delay > 0) {
+      setIsSyncing(true);
     }
 
-    try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new AudioContext({ latencyHint: 'interactive' });
-        const ctx = audioCtxRef.current;
-        const base = (ctx as any).baseLatency ?? 0;
-        const output = (ctx as any).outputLatency ?? 0;
-        const estLatencyMs = (base + output) * 1000;
-        if (estLatencyMs > 0) {
-          setOutputLatencyMs(estLatencyMs);
+    const timerId = setTimeout(() => {
+      setIsSyncing(false);
+      if (audioRef.current) {
+        audioRef.current.srcObject = remoteStream;
+        audioRef.current.volume = 0; // mute element to avoid double output when context is used
+        audioRef.current.play().catch(() => {
+          console.log('Autoplay blocked, waiting for user interaction');
+        });
+      }
+
+      try {
+        if (!audioCtxRef.current) {
+          audioCtxRef.current = new AudioContext({ latencyHint: 'interactive' });
+          const ctx = audioCtxRef.current;
+          const base = (ctx as any).baseLatency ?? 0;
+          const output = (ctx as any).outputLatency ?? 0;
+          const estLatencyMs = (base + output) * 1000;
+          if (estLatencyMs > 0) {
+            setOutputLatencyMs(estLatencyMs);
+            try {
+              localStorage.setItem('syncspeakers_output_latency_ms', estLatencyMs.toString());
+            } catch {
+              // Ignore storage errors
+            }
+          }
+
+          // Fire a short calibration tone once to warm up the
+          // output pipeline and anchor timing based on AudioContext.
           try {
-            localStorage.setItem('syncspeakers_output_latency_ms', estLatencyMs.toString());
-          } catch {
-            // Ignore storage errors
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            gain.gain.value = 0.1;
+            osc.frequency.value = 1000;
+            osc.connect(gain).connect(ctx.destination);
+            const startAt = ctx.currentTime + 0.05;
+            const stopAt = startAt + 0.1;
+            osc.start(startAt);
+            osc.stop(stopAt);
+          } catch (toneErr) {
+            console.warn('Calibration tone failed:', toneErr);
           }
         }
-
-        // Fire a short calibration tone once to warm up the
-        // output pipeline and anchor timing based on AudioContext.
-        try {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          gain.gain.value = 0.1;
-          osc.frequency.value = 1000;
-          osc.connect(gain).connect(ctx.destination);
-          const startAt = ctx.currentTime + 0.05;
-          const stopAt = startAt + 0.1;
-          osc.start(startAt);
-          osc.stop(stopAt);
-        } catch (toneErr) {
-          console.warn('Calibration tone failed:', toneErr);
+        if (sourceRef.current) {
+          sourceRef.current.disconnect();
         }
+        if (!gainRef.current) {
+          gainRef.current = audioCtxRef.current.createGain();
+          gainRef.current.gain.value = volume;
+        }
+        sourceRef.current = audioCtxRef.current.createMediaStreamSource(remoteStream);
+        sourceRef.current.connect(gainRef.current);
+        gainRef.current.connect(audioCtxRef.current.destination);
+        audioCtxRef.current.resume().then(() => {
+          setIsPlaying(true);
+          setCtxError(null);
+        }).catch((err) => {
+          console.warn('AudioContext resume blocked:', err);
+          setCtxError('Tap play to resume audio');
+        });
+      } catch (err) {
+        console.error('AudioContext setup failed:', err);
+        setCtxError('Low-latency path unavailable');
       }
-      if (sourceRef.current) {
-        sourceRef.current.disconnect();
-      }
-      if (!gainRef.current) {
-        gainRef.current = audioCtxRef.current.createGain();
-        gainRef.current.gain.value = volume;
-      }
-      sourceRef.current = audioCtxRef.current.createMediaStreamSource(remoteStream);
-      sourceRef.current.connect(gainRef.current);
-      gainRef.current.connect(audioCtxRef.current.destination);
-      audioCtxRef.current.resume().then(() => {
-        setIsPlaying(true);
-        setCtxError(null);
-      }).catch((err) => {
-        console.warn('AudioContext resume blocked:', err);
-        setCtxError('Tap play to resume audio');
-      });
-    } catch (err) {
-      console.error('AudioContext setup failed:', err);
-      setCtxError('Low-latency path unavailable');
-    }
+    }, Math.max(0, delay));
 
     return () => {
+      clearTimeout(timerId);
       if (sourceRef.current) {
         sourceRef.current.disconnect();
         sourceRef.current = null;
@@ -171,7 +192,37 @@ export function SpeakerView({
         gainRef.current = null;
       }
     };
-  }, [remoteStream]);
+  }, [remoteStream, startAudioCommand, wsTimeOffset, volume]);
+
+  // Handle Drift (Advanced Sync)
+  useEffect(() => {
+    if (!isPlaying || !startAudioCommand || !audioRef.current) return;
+    
+    // Periodic correction
+    const intervalId = setInterval(() => {
+      if (!audioRef.current) return;
+      const audio = audioRef.current;
+      
+      const elapsed = Date.now() + wsTimeOffset - startAudioCommand.startTime;
+      if (elapsed < 0) return; // Not started yet
+
+      const expectedTime = elapsed; // expected playback time in ms
+      const actualTime = audio.currentTime * 1000;
+
+      const drift = actualTime - expectedTime;
+
+      if (Math.abs(drift) > 50) {
+        audio.playbackRate = drift > 0 ? 0.98 : 1.02;
+      } else {
+        audio.playbackRate = 1.0;
+      }
+    }, 2000);
+
+    return () => {
+      clearInterval(intervalId);
+      if (audioRef.current) audioRef.current.playbackRate = 1.0;
+    };
+  }, [isPlaying, startAudioCommand, wsTimeOffset]);
 
   // Apply any incoming synchronized playback commands.
   useEffect(() => {
@@ -236,14 +287,30 @@ export function SpeakerView({
         
         {isConnected ? (
           <>
-            <span className="status-badge connected mb-4">
-              <span className="status-dot" />
-              Connected to {hostDisplayName}
-            </span>
+            <div className="flex flex-col gap-2 mb-4">
+              <span className="status-badge connected w-fit">
+                <span className="status-dot" />
+                Connected to {hostDisplayName}
+              </span>
+              {isLanMode && (
+                <span className="status-badge w-fit" style={{background: 'var(--success-light)', color: 'var(--success-dark)'}}>
+                  ⚡ Low latency mode
+                </span>
+              )}
+            </div>
             
             {remoteStream ? (
               <div className="mt-4">
-                {!isPlaying && (
+                {isSyncing && (
+                  <p className="text-muted mb-4 font-medium" style={{ color: 'var(--primary)' }}>
+                    🔄 Syncing...
+                  </p>
+                )}
+                <div className="mt-2 text-muted mb-4" style={{fontSize: '0.85rem'}}>
+                  📶 Connection quality: Good {wsStatus === 'connected' ? '(Stable)' : ''}
+                </div>
+
+                {!isPlaying && !isSyncing && (
                   <button className="btn btn-primary mb-4" onClick={handlePlay}>
                     🔊 Start Playback
                   </button>
