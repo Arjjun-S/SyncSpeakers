@@ -7,11 +7,21 @@ interface UseWebRTCOptions {
 
 const ENABLE_STATS_LOGS = import.meta.env.VITE_DEBUG_STATS === "true";
 
-const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-  ],
+const isLanMode = () => {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return host.includes("192.168") || host.includes("localhost") || host === "127.0.0.1";
+};
+
+const getRTCConfig = (): RTCConfiguration => {
+  return {
+    iceServers: isLanMode() ? [] : [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ],
+    bundlePolicy: "max-bundle",
+    rtcpMuxPolicy: "require"
+  };
 };
 
 export function useWebRTC({
@@ -67,7 +77,7 @@ export function useWebRTC({
       }
 
       console.log(`Creating peer connection for ${peerId}`);
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+      const pc = new RTCPeerConnection(getRTCConfig());
       peerConnectionsRef.current.set(peerId, pc);
 
       // Handle ICE candidates
@@ -146,6 +156,10 @@ export function useWebRTC({
 
       try {
         const offer = await pc.createOffer();
+        // SDP tweaks (important) - Reduces packet time -> lower delay
+        if (offer.sdp) {
+          offer.sdp = offer.sdp.replace(/useinbandfec=1/g, "useinbandfec=1;ptime=10");
+        }
         await pc.setLocalDescription(offer);
         console.log(`Created offer for ${peerId}`);
         sendSignal(offer);

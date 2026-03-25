@@ -17,7 +17,14 @@ import {
   storeDisplayName 
 } from './hooks/useSignaling';
 import { useWebRTC } from './hooks/useWebRTC';
-import { ANIMALS, type Animal, type InviteMessage, type PlaybackCommandPayload, getAnimalEmoji } from './types';
+import { 
+  ANIMALS, 
+  type Animal, 
+  type InviteMessage, 
+  type PlaybackCommandPayload, 
+  type StartAudioPayload,
+  getAnimalEmoji 
+} from './types';
 import { useServerClock } from './hooks/useServerClock';
 
 type AppView = 'welcome' | 'host' | 'speaker' | 'idle';
@@ -76,9 +83,13 @@ function App() {
 
   // Global synchronized clock state
   const { getServerTime } = useServerClock();
+  const [wsTimeOffset, setWsTimeOffset] = useState<number>(0);
 
   // Latest playback command from host (for this client as speaker)
   const [playbackCommand, setPlaybackCommand] = useState<PlaybackCommandPayload | null>(null);
+  
+  // Start audio command from host
+  const [startAudioCommand, setStartAudioCommand] = useState<StartAudioPayload | null>(null);
   
   // Check URL for room code
   useEffect(() => {
@@ -121,12 +132,15 @@ function App() {
   const handleInviteResponse = useCallback((from: string, accepted: boolean) => {
     console.log(`Invite response from ${from}: ${accepted ? 'accepted' : 'declined'}`);
     if (accepted && localStreamRef.current) {
+      const BUFFER_MS = 300;
+      const startTime = Date.now() + wsTimeOffset + BUFFER_MS;
+      sendSignalRef.current?.(from, { type: 'start-audio', startTime } as any);
       // Create WebRTC offer to the new speaker
-      createOffer(from, (payload) => {
+      createOffer(from, (payload: any) => {
         sendSignalRef.current?.(from, payload);
       });
     }
-  }, [createOffer]);
+  }, [createOffer, wsTimeOffset]);
   
   const handleInviteExpired = useCallback((inviteId: string) => {
     console.log('Invite expired:', inviteId);
@@ -144,9 +158,14 @@ function App() {
     setPendingInviteFrom(null);
   }, []);
   
-  const handleSignalMessage = useCallback((from: string, payload: RTCSessionDescriptionInit | RTCIceCandidateInit) => {
+  const handleSignalMessage = useCallback((from: string, payload: any) => {
+    if (payload.type === 'start-audio') {
+      console.log('Received start-audio signal:', payload);
+      setStartAudioCommand(payload as StartAudioPayload);
+      return;
+    }
     console.log('Received signal from:', from);
-    handleSignal(from, payload, (p) => {
+    handleSignal(from, payload as RTCSessionDescriptionInit | RTCIceCandidateInit, (p) => {
       sendSignalRef.current?.(from, p);
     });
   }, [handleSignal]);
@@ -191,6 +210,9 @@ function App() {
     onPlayCommand: (cmd) => {
       setPlaybackCommand(cmd);
     },
+    onTimeSync: (serverTime) => {
+      setWsTimeOffset(serverTime - Date.now());
+    },
   });
   
   // Store sendSignal ref for WebRTC callbacks
@@ -207,7 +229,7 @@ function App() {
       if (speakers.length) {
         console.log('🔄 Signaling reconnected, refreshing offers to speakers');
         speakers.forEach(speaker => {
-          createOffer(speaker.clientId, (payload) => {
+          createOffer(speaker.clientId, (payload: any) => {
             sendSignalRef.current?.(speaker.clientId, payload);
           });
         });
@@ -264,11 +286,15 @@ function App() {
     localStreamRef.current = stream;
     setLocalStream(stream);
     
+    const BUFFER_MS = 300;
+    const startTime = Date.now() + wsTimeOffset + BUFFER_MS;
+
     // If there are already speakers, create offers for them
     clients
       .filter(c => c.role === 'speaker' && c.clientId !== clientId)
       .forEach(speaker => {
-        createOffer(speaker.clientId, (payload) => {
+        sendSignalRef.current?.(speaker.clientId, { type: 'start-audio', startTime } as any);
+        createOffer(speaker.clientId, (payload: any) => {
           sendSignalRef.current?.(speaker.clientId, payload);
         });
       });
@@ -476,6 +502,8 @@ function App() {
                 onReconnect={manualReconnect}
                 playbackCommand={playbackCommand}
                 getServerTime={getServerTime}
+                startAudioCommand={startAudioCommand}
+                wsTimeOffset={wsTimeOffset}
               />
             )}
           </div>

@@ -568,6 +568,18 @@ setInterval(() => {
   }
 }, 30000);
 
+// Broadcast time sync to all connected clients every 2000ms
+setInterval(() => {
+  const now = Date.now();
+  const timeMsg = JSON.stringify({ type: 'time-sync', serverTime: now });
+  
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(timeMsg);
+    }
+  });
+}, 2000);
+
 // Handle server shutdown gracefully
 process.on('SIGTERM', () => {
   console.log('🛑 Server shutting down...');

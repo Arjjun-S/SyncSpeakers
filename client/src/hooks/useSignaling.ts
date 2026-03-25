@@ -72,11 +72,12 @@ interface UseSignalingOptions {
   onInviteCancelled?: () => void;
   onSignal?: (
     from: string,
-    payload: RTCSessionDescriptionInit | RTCIceCandidateInit
+    payload: any // using any for RTCSessionDescriptionInit | RTCIceCandidateInit | StartAudioPayload
   ) => void;
   onPlayCommand?: (payload: PlaybackCommandPayload) => void;
   onHostDisconnected?: () => void;
   onError?: (message: string) => void;
+  onTimeSync?: (serverTime: number) => void;
 }
 
 export function useSignaling(options: UseSignalingOptions) {
@@ -182,6 +183,11 @@ export function useSignaling(options: UseSignalingOptions) {
           const opts = callbacksRef.current;
 
           if (message.type === "pong") return; // Heartbeat response
+
+          if (message.type === "time-sync") {
+            opts.onTimeSync?.(message.serverTime);
+            return;
+          }
 
           switch (message.type) {
             case "registered":
